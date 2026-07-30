@@ -33,7 +33,7 @@ Target gates: G0 and G1. Dates are intentionally gate-based.
 | Define the sample alert-review problem and demo perspectives | Three explicitly synthetic perspectives and a sample current workflow | Hackathon Product Lead | Public Sock Shop scope | Complete for sample |
 | Establish synthetic baseline, success, and rollback measures | Approved metric dictionary, fixed scenario specification, roles, and thresholds | Evaluation Maintainer | Sample assumptions | Complete for sample |
 | Resolve implementation architecture decisions | Approved runtime, delivery, persistence, identity, scope, deployment, and adapter ADRs | Repository Maintainer | G0 | A03-A07 accepted |
-| Approve public-demo data and threat model | Data flows, classification, retention, and threats reviewed | Platform/Safety Reviewer | Architecture ADRs | Planned: A08 |
+| Approve public-demo data and threat model | Data flows, classification, retention, and threats reviewed | Platform/Safety Reviewer | Architecture ADRs | Complete for sample; Gate G1 passed |
 
 ## Next — Prove the read-only alert slice
 

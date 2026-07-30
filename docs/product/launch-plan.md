@@ -1,7 +1,7 @@
 # Alert Intelligence Launch Plan
 
-Status: Gate G0 passed for the local public hackathon sample only; no production
-launch is authorized.
+Status: Gates G0 and G1 passed for the local public hackathon sample only; no
+production launch is authorized.
 
 > This plan governs a local reference demonstration using public Sock Shop
 > metadata and synthetic alerts. It does not authorize company data, external
@@ -48,8 +48,8 @@ launch is authorized.
 | Gate | Entry criteria | Exit evidence | Decision owner | Status |
 | --- | --- | --- | --- | --- |
 | G0 — Scope | Product templates exist | Sample scope, roles, baseline assumptions, success, and rollback approved | Repository Owner | Passed for public sample on 2026-07-30 |
-| G1 — Design | G0 passed | ADRs and read-only threat model approved | Repository Owner | Not started |
-| G2 — Local slice | G1 passed | Durable demo slice and recovery tests pass | Demo Operator | Blocked by G1 |
+| G1 — Design | G0 passed | ADRs and read-only threat model approved | Repository Owner | Passed for public sample on 2026-07-30 |
+| G2 — Local slice | G1 passed | Durable demo slice and recovery tests pass | Demo Operator | Not started |
 | G3 — Offline candidate | G2 passed | Public adapter contracts and replay thresholds pass | Hackathon Product Lead | Blocked by G2 |
 | G4 — Shadow | G3 passed | Local shadow reliability, quality, latency, cost, and safety reviewed | Repository Owner | Blocked by G3 |
 | G5 — Reviewed pilot | G4 passed | Judge/user demo with mandatory review meets sample criteria | Repository Owner | Blocked by G4 |
@@ -73,7 +73,8 @@ Define measurable triggers before shadow or pilot traffic begins.
 - [x] Sample roles and backups are assigned for the local demonstration.
 - [x] Sample scope, synthetic perspectives, success criteria, and rollback
   criteria are approved for the hackathon.
-- [ ] Data classification, retention, and deletion ownership are approved.
+- [x] Data classification, retention, and deletion ownership are approved for
+  the public sample.
 - [ ] Authentication, authorization, replay protection, and audit are tested.
 - [ ] Replay evaluation and release gates meet approved thresholds.
 - [ ] Dashboards, alerts, support paths, and runbooks are exercised.
@@ -86,6 +87,7 @@ Define measurable triggers before shadow or pilot traffic begins.
 | Gate/date | Evidence reviewed | Risks/exceptions | Decision | Decision owner/approvers | Follow-up |
 | --- | --- | --- | --- | --- | --- |
 | G0 / 2026-07-30 | Public Sock Shop scope, synthetic perspectives, 24-case baseline specification, sample thresholds, and local-only side effects | No real interviews or measured production baseline; dataset fixtures are deferred to D01 | Pass for hackathon sample only | Repository Owner (sample role) | Begin Track A ADRs; repeat G0 with real evidence before company reuse |
+| G1 / 2026-07-30 | ADR-0001 through ADR-0006 plus read-only data-flow, classification, STRIDE/AI/MCP threat review | Implementation controls remain unverified until B/C/D tasks; local host, bearer-token, single-database-host, and no-backup residual risks accepted only for sample | Pass for hackathon sample only | Repository Owner and Platform/Safety Reviewer (sample roles) | Begin B01; keep external delivery, mutation, company data, and public exposure disabled |
 
 ## Related documents
 
@@ -94,4 +96,5 @@ Define measurable triggers before shadow or pilot traffic begins.
 - [Use cases](use-cases.md)
 - [Metrics](metrics.md)
 - [Roadmap](roadmap.md)
+- [Threat model](../security/read-only-pilot-threat-model.md)
 - [Execution backlog](../production-productization-review.md)

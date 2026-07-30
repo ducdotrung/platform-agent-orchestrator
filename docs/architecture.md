@@ -95,6 +95,10 @@ snapshots. Telemetry failure must not change workflow policy or business state.
 
 ## Safety
 
+- The
+  [public-pilot threat model](security/read-only-pilot-threat-model.md)
+  defines data classes, trust boundaries, safe failures, and security test
+  traceability.
 - Webhook payloads are untrusted data, not instructions.
 - Retrieval tools are read-only by default.
 - Mutation tools are separately deployed and allow-listed.
