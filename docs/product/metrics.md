@@ -37,9 +37,9 @@ sample; not measured company results.
 
 ## Synthetic baseline specification
 
-The future D01 dataset will materialize these assumptions as sanitized fixtures.
-Until that commit exists, this table is a planning specification, not a replay
-result.
+The D01 `sock-shop-alerts` dataset materializes these assumptions as sanitized,
+versioned fixtures. This table and dataset remain a planning baseline, not a
+replay result.
 
 | Property | Sample value |
 | --- | --- |
@@ -103,7 +103,7 @@ result.
 
 | Report/version | Baseline/candidate | Window | Dataset/release | Evidence location | Reviewer | Decision |
 | --- | --- | --- | --- | --- | --- | --- |
-| Planning baseline v0.1 | Synthetic baseline | Fixed 24-scenario specification | Dataset not yet materialized; release identifier will be added by D05 | This document | Repository Owner | Approved for hackathon planning only |
+| Planning baseline v0.1 | Synthetic baseline | Fixed 24-scenario specification | `evaluation/datasets/sock-shop-alerts-v0.1.json`; release identifier will be added by D05 | [Replay inputs](../evaluation.md) | Repository Owner | Approved for hackathon planning only |
 
 ## Related documents
 

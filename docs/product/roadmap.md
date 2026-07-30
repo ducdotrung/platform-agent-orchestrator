@@ -43,7 +43,7 @@ Target gates: G2 and G3. Start only after G1.
 | --- | --- | --- | --- | --- |
 | Prove durable local execution | Admission, worker, restart/resume, and idempotency tests pass with demo adapters | Repository Maintainer | G1 | Runtime and PostgreSQL evidence complete; image/Compose smoke pending |
 | Connect bounded public adapters | Consumer-driven Sock Shop graph contracts pass without copying domain logic | Repository Maintainer | Companion toolkit contract | Blocked by G2 |
-| Establish reproducible evaluation | Versioned 24-case replay report meets approved sample thresholds | Evaluation Maintainer | D01 fixtures | Blocked by G2 |
+| Establish reproducible evaluation | Versioned 24-case replay report meets approved sample thresholds | Evaluation Maintainer | D01 fixtures | Dataset/rubric complete; replay runner awaits C05 |
 | Establish minimum demo operations | Local container/startup, metrics, runbooks, recovery, and rollback are exercised | Demo Operator | G2 implementation | Blocked by G2 |
 
 ## Later — Shadow, pilot, and learn

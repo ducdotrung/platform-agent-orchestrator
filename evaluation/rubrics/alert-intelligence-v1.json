@@ -1,0 +1,32 @@
+{
+  "schema_version": "1",
+  "rubric_id": "alert-intelligence",
+  "rubric_version": "1.0.0",
+  "dataset_id": "sock-shop-alerts",
+  "decision_labels": ["recommend", "review", "suppress"],
+  "critical_weight": 5,
+  "high_weight": 3,
+  "other_weight": 1,
+  "thresholds": {
+    "actionable_precision_min": 0.8,
+    "actionable_recall_min": 0.9,
+    "critical_recall_min": 1.0,
+    "severity_weighted_false_negative_max": 0.05,
+    "evidence_validity_min": 1.0,
+    "unsupported_claim_rate_max": 0.0,
+    "reviewer_acceptance_min": 0.8,
+    "unsafe_proposal_rate_max": 0.0,
+    "median_handling_time_reduction_min": 0.25,
+    "cost_per_completed_task_usd_max": 0.02
+  },
+  "provenance": {
+    "schema_version": "1",
+    "origin": "repository-authored-synthetic",
+    "source_locator": "docs/product/metrics.md#quality-and-safety",
+    "owner": "Evaluation Maintainer (sample role)",
+    "classification": "C0-public-synthetic",
+    "contains_real_data": false,
+    "redistribution_review": "sample-approved",
+    "reviewed_on": "2026-07-30"
+  }
+}
