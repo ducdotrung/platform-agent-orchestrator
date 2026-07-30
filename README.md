@@ -153,6 +153,8 @@ replay protection.
 Compose topology, migrations, health, shutdown, and secret boundaries.
 [ADR-0006](docs/adr/0006-external-adapter-contracts.md) defines async adapter
 contracts and the read-only public Sock Shop service-graph integration.
+The [application persistence guide](docs/persistence.md) documents migration
+ownership, commands, and the current database-test boundary.
 The [read-only pilot threat model](docs/security/read-only-pilot-threat-model.md)
 defines trust boundaries, data classes, abuse cases, and Gate G1 security
 requirements for the public sample.
