@@ -4,6 +4,12 @@
 > the approved gated backlog. See the
 > [review and commit-sized execution backlog](production-productization-review.md).
 
+> Current delivery context: the repository is preparing a public hackathon
+> sample with synthetic alerts and public Sock Shop evidence. References to
+> internal adoption describe a future application of the design, not measured
+> company usage. Gate G0 must be repeated with real stakeholders and data before
+> the code is connected to company services.
+
 ## Purpose
 
 Turn `platform-agent-orchestrator` from a tested reference control plane into an adopted internal Agentic Operations Platform. The first production product is alert intelligence; later releases expand the same control plane to SRE ticket execution, knowledge refresh, and engineering assistance.

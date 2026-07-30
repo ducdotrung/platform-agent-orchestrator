@@ -1,18 +1,19 @@
 # Product Roadmap
 
-Status: draft outcome roadmap; dates and commitments require owner approval.
+Status: outcome roadmap approved for the public hackathon sample; company reuse
+requires replanning.
 
 ## Document control
 
 | Field | Value |
 | --- | --- |
-| Product owner | `TBD` |
-| Technical owner | `TBD` |
-| Operational owner | `TBD` |
-| Approvers | `TBD` |
-| Planning horizon | `TBD` |
-| Review cadence | `TBD` |
-| Last reviewed | `TBD` |
+| Product owner | Hackathon Product Lead (sample role) |
+| Technical owner | Repository Maintainer (sample role) |
+| Operational owner | Demo Operator (sample role) |
+| Approvers | Repository Owner (sample role) |
+| Planning horizon | Gate-based through the public hackathon demonstration |
+| Review cadence | At every gate |
+| Last reviewed | 2026-07-30 |
 
 ## Roadmap rules
 
@@ -25,36 +26,36 @@ Status: draft outcome roadmap; dates and commitments require owner approval.
 
 ## Now — Validate scope and design
 
-Target gates: G0 and G1. Dates: `TBD`.
+Target gates: G0 and G1. Dates are intentionally gate-based.
 
 | Outcome | Evidence of completion | Owner | Dependencies | Status |
 | --- | --- | --- | --- | --- |
-| Validate the alert-review problem and launch users | Three or more representative perspectives and current-workflow evidence | `TBD` | Stakeholder access | `TBD` |
-| Establish baseline, success, and rollback measures | Approved metric dictionary, sources, owners, windows, and thresholds | `TBD` | Data access | `TBD` |
-| Resolve production architecture decisions | Approved runtime, delivery, persistence, identity, tenancy, deployment, and adapter ADRs | `TBD` | Platform/security input | `TBD` |
-| Approve read-only data and threat model | Data flows, classification, retention, and threats reviewed | `TBD` | Security/privacy input | `TBD` |
+| Define the sample alert-review problem and demo perspectives | Three explicitly synthetic perspectives and a sample current workflow | Hackathon Product Lead | Public Sock Shop scope | Complete for sample |
+| Establish synthetic baseline, success, and rollback measures | Approved metric dictionary, fixed scenario specification, roles, and thresholds | Evaluation Maintainer | Sample assumptions | Complete for sample |
+| Resolve implementation architecture decisions | Approved runtime, delivery, persistence, identity, scope, deployment, and adapter ADRs | Repository Maintainer | G0 | Next: A03-A07 |
+| Approve public-demo data and threat model | Data flows, classification, retention, and threats reviewed | Platform/Safety Reviewer | Architecture ADRs | Planned: A08 |
 
 ## Next — Prove the read-only alert slice
 
-Target gates: G2 and G3. Dates: `TBD`.
+Target gates: G2 and G3. Start only after G1.
 
 | Outcome | Evidence of completion | Owner | Dependencies | Status |
 | --- | --- | --- | --- | --- |
-| Prove durable local execution | Admission, worker, restart/resume, and idempotency tests pass with demo adapters | `TBD` | G1 | `TBD` |
-| Connect bounded real adapters | Consumer-driven contracts pass without copying domain logic | `TBD` | External owners | `TBD` |
-| Establish reproducible evaluation | Versioned replay report meets approved quality and safety thresholds | `TBD` | Protected dataset | `TBD` |
-| Establish minimum operations | Deployment, dashboards, alerts, runbooks, recovery, and rollback are exercised | `TBD` | Platform support | `TBD` |
+| Prove durable local execution | Admission, worker, restart/resume, and idempotency tests pass with demo adapters | Repository Maintainer | G1 | Blocked by G1 |
+| Connect bounded public adapters | Consumer-driven Sock Shop graph contracts pass without copying domain logic | Repository Maintainer | Companion toolkit contract | Blocked by G2 |
+| Establish reproducible evaluation | Versioned 24-case replay report meets approved sample thresholds | Evaluation Maintainer | D01 fixtures | Blocked by G2 |
+| Establish minimum demo operations | Local container/startup, metrics, runbooks, recovery, and rollback are exercised | Demo Operator | G2 implementation | Blocked by G2 |
 
 ## Later — Shadow, pilot, and learn
 
-Target gates: G4-G6. Dates: `TBD`.
+Target gates: G4-G5. G6 auto-send is deferred for the local-only sample.
 
 | Outcome | Evidence of completion | Owner | Dependencies | Status |
 | --- | --- | --- | --- | --- |
-| Validate safely in shadow mode | No user-visible delivery; measured quality, reliability, latency, and cost reviewed | `TBD` | G3 | `TBD` |
-| Validate adoption with mandatory review | One-team pilot meets approved value, trust, and reliability criteria | `TBD` | G4 | `TBD` |
-| Consider bounded auto-send | Only approved low-risk cases canary successfully | `TBD` | Explicit G5 decision | `TBD` |
-| Prioritize or reject platform expansion | Roadmap decision is backed by pilot evidence | `TBD` | G5 results | `TBD` |
+| Validate safely in local shadow mode | No notification receipt; measured quality, reliability, latency, and cost reviewed | Demo Operator | G3 | Blocked by G3 |
+| Validate the judge/user demonstration with mandatory review | Sample demo meets approved value, trust, and reliability criteria | Hackathon Product Lead | G4 | Blocked by G4 |
+| Keep auto-send disabled | No external delivery capability exists in the public sample | Platform/Safety Reviewer | Sample scope | Deferred |
+| Prioritize or reject further public-demo expansion | Roadmap decision is backed by hackathon results without claiming company adoption | Repository Owner | G5 results | Blocked by G5 |
 
 ## Deferred expansion
 
@@ -68,17 +69,18 @@ Target gates: G4-G6. Dates: `TBD`.
 
 | Capability/change | Owning repository/team | Contract/issue | Required by | Owner | Status |
 | --- | --- | --- | --- | --- | --- |
-| Alert event production and policy | `sre-alert-agent` | `TBD` | G3 | `TBD` | `TBD` |
-| Teams notification delivery | `sre-alert-agent` | `TBD` | G3 | `TBD` | `TBD` |
-| Read-only service/runbook evidence | `service-graph-toolkit` | `TBD` | G3 | `TBD` | `TBD` |
-| Bounded SRE knowledge | `sre-skills` | Deferred for alert pilot | Later | `TBD` | Deferred |
-| User-facing wiki/UI | `code-atlas-workbench` | Deferred for alert pilot | Later | `TBD` | Deferred |
+| Alert event production and policy | Local fixture in this repository | Future versioned event contract | G2 | Repository Maintainer | Planned |
+| Company alert event production | `sre-alert-agent` | Explicitly excluded from public sample | Company reuse | Future company owner | Deferred |
+| Teams notification delivery | `sre-alert-agent` | Explicitly excluded from public sample | Company reuse | Future company owner | Deferred |
+| Read-only public service evidence | `service-graph-toolkit` | Sock Shop inventory and local MCP contract | G3 | Companion repository maintainer | Public sample available |
+| Bounded SRE knowledge | `sre-skills` | Deferred for alert pilot | Later | Future owner | Deferred |
+| User-facing wiki/UI | `code-atlas-workbench` | Deferred for alert pilot | Later | Future owner | Deferred |
 
 ## Roadmap decision record
 
 | Date | Decision | User/problem evidence | Trade-offs | Expected metric effect | Owner/approvers | Revisit condition |
 | --- | --- | --- | --- | --- | --- | --- |
-| `TBD` | `TBD` | `TBD` | `TBD` | `TBD` | `TBD` | `TBD` |
+| 2026-07-30 | Use Sock Shop checkout services and a synthetic 24-alert baseline for the public sample | Public companion inventory and explicitly synthetic perspectives | Reproducible and safe, but not real user validation | Establish hackathon evaluation targets only | Repository Owner | Repeat discovery before company reuse or if the sample cannot demonstrate value |
 
 ## Related documents
 

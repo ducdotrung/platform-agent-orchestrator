@@ -4,6 +4,11 @@ A runnable reference control plane for coordinating the existing SRE, service
 graph, Code Atlas, Jira, and alert capabilities without copying their domain
 logic into one repository.
 
+The current productization path is a public, local-only hackathon sample using
+synthetic alerts and Sock Shop microservice evidence. Its personas, baseline,
+and targets are illustrative; company adoption requires fresh discovery,
+measured baselines, security review, and approval.
+
 The sample uses:
 
 - **LangGraph** for workflow state, routing, parallel work, checkpointing, and

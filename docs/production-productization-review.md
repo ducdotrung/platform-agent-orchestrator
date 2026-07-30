@@ -1,7 +1,8 @@
 # Production Productization Plan Review and Execution Backlog
 
-Status: reviewed on 2026-07-30. A01 is complete; A02 awaits stakeholder input
-and approval.
+Status: reviewed on 2026-07-30. A01 and the public-sample form of A02 are
+complete; A03 awaits approval. Gate G0 applies only to the synthetic hackathon
+sample and must be repeated before company use.
 
 This document reviews
 [the productization plan](production-productization-plan.md) against the current
@@ -93,7 +94,7 @@ No mutation tool is part of G0-G6.
 | ID | Commit deliverable | Verification | Depends on |
 | --- | --- | --- | --- |
 | A01 | Add Phase 0 product document templates with owners, evidence links, and `TBD` fields rather than invented claims. | Documentation links and required fields reviewed. | None |
-| A02 | Record approved pilot scope, metric definitions, baseline window, success thresholds, and rollback criteria. | G0 checklist signed off by named owners. | Stakeholder input, A01 |
+| A02 | Record approved pilot scope, metric definitions, baseline window, success thresholds, and rollback criteria. The public sample must label synthetic assumptions explicitly. | G0 sample checklist approved by repository roles; repeat with real stakeholders before company use. | Public sample decision, A01 |
 | A03 | Add ADR for the runtime I/O model and lifecycle boundary. | ADR includes alternatives, consequences, and migration effect on current ports. | A02 |
 | A04 | Add ADR for outbox/queue topology and failure semantics. | State machine, leases, retries, dead letters, and recovery behavior are specified. | A02 |
 | A05 | Add ADR for Postgres schemas, checkpointing, idempotency, side effects, audit, and retention ownership. | Store boundaries and transaction boundaries are unambiguous. | A04 |

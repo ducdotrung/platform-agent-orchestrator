@@ -1,16 +1,19 @@
 # Product Use Cases
 
-Status: draft template; candidate use cases require evidence and approval.
+Status: UC-01 approved for the public hackathon sample only.
+
+> The product value and user needs are synthetic demo hypotheses. Passing this
+> sample does not demonstrate company adoption or production readiness.
 
 ## Document control
 
 | Field | Value |
 | --- | --- |
-| Product owner | `TBD` |
-| Operational owner | `TBD` |
-| Technical owner | `TBD` |
-| Approvers | `TBD` |
-| Last reviewed | `TBD` |
+| Product owner | Hackathon Product Lead (sample role) |
+| Operational owner | Demo Operator (sample role) |
+| Technical owner | Repository Maintainer (sample role) |
+| Approvers | Repository Owner (sample role) |
+| Last reviewed | 2026-07-30 |
 
 ## Selection criteria
 
@@ -18,24 +21,27 @@ Score candidate use cases only after evidence is available.
 
 | Criterion | Weight | Scoring rule | Evidence source |
 | --- | --- | --- | --- |
-| User/operational value | `TBD` | `TBD` | Interviews and baseline |
-| Frequency | `TBD` | `TBD` | Alert history |
-| Safety and reversibility | `TBD` | `TBD` | Risk review |
-| Evidence availability | `TBD` | `TBD` | Service graph/runbook assessment |
-| Evaluation feasibility | `TBD` | `TBD` | Replay dataset review |
-| Delivery effort | `TBD` | `TBD` | Technical design |
+| User/operational value | 30% | Score 1-5 against synthetic jobs and handling-time hypothesis | Synthetic perspectives and baseline |
+| Frequency | 10% | Score 1-5 against representation in the 24-case scenario set | Synthetic baseline |
+| Safety and reversibility | 20% | Score 1-5; local/read-only/reversible scores highest | Sample risk review |
+| Evidence availability | 20% | Score 1-5 against public revisioned graph/code evidence | Sock Shop inventory and MCP demo |
+| Evaluation feasibility | 10% | Score 1-5 against deterministic replay coverage | Planned replay fixtures |
+| Delivery effort | 10% | Score 1-5 where lower bounded effort scores highest | Technical design |
 
 ## UC-01 — Alert intelligence
 
-Status: candidate beachhead; approval `TBD`.
+Status: approved beachhead for the public hackathon sample.
 
 ### User and outcome
 
-- Primary user: SRE/on-call engineer (`TBD` validation).
-- Trigger: a versioned, authenticated alert event from `sre-alert-agent`.
+- Primary user: synthetic Sock Shop on-call engineer.
+- Trigger: a versioned local alert fixture shaped like the future
+  `sre-alert-agent` contract; there is no direct Sentry connection.
 - Desired outcome: an evidence-backed recommendation delivered or held for
   review according to deterministic policy.
-- Product value hypothesis: `TBD`.
+- Product value hypothesis: evidence enrichment and structured review reduce
+  the illustrative median handling time from six to at most 4.5 minutes while
+  preserving actionable-alert recall.
 
 ### Happy path
 
@@ -54,22 +60,22 @@ Status: candidate beachhead; approval `TBD`.
 
 | Condition | Required outcome | Approval status |
 | --- | --- | --- |
-| Unknown or incompatible event | Reject before workflow admission | `TBD` |
-| Missing/stale evidence | Mark provisional and require review; do not silently suppress | `TBD` |
-| Invalid model output or citation | Reject the decision and follow deterministic fallback | `TBD` |
-| Retrieval/model timeout | Retry only when classified retryable, then review/fail safely | `TBD` |
-| Ambiguous notification timeout | Reconcile using the durable idempotency receipt before retry | `TBD` |
+| Unknown or incompatible event | Reject before workflow admission | Approved sample behavior |
+| Missing/stale evidence | Mark provisional and require review; do not silently suppress | Approved sample behavior |
+| Invalid model output or citation | Reject the decision and follow deterministic fallback | Approved sample behavior |
+| Retrieval/model timeout | Retry only when classified retryable, then review/fail safely | Approved sample behavior |
+| Ambiguous notification timeout | Reconcile using the durable idempotency receipt before retry | Approved sample behavior |
 | Telemetry unavailable | Continue according to business state; never use telemetry for recovery | Approved repository rule |
 
 ### Acceptance evidence
 
 | Requirement | Measure/test | Threshold | Owner | Evidence |
 | --- | --- | --- | --- | --- |
-| Useful recommendations | `TBD` | `TBD` | `TBD` | `TBD` |
-| Actionable-alert recall | `TBD` | `TBD` | `TBD` | `TBD` |
-| Evidence validity | `TBD` | `TBD` | `TBD` | `TBD` |
-| Review and delivery safety | Replay/resilience tests | `TBD` | `TBD` | `TBD` |
-| Review-time improvement | Baseline versus pilot | `TBD` | `TBD` | `TBD` |
+| Useful recommendations | Synthetic reviewer acceptance rubric | At least 80% | Hackathon Product Lead | Versioned replay report |
+| Actionable-alert recall | Replay against 10 actionable cases | At least 90% overall and 100% for critical cases | Demo Operator | Versioned replay report |
+| Evidence validity | Referenced evidence is present and supports the bounded claim | 100% | Platform/Safety Reviewer | Replay report |
+| Review and delivery safety | Replay/resilience tests | Zero unauthorized or duplicate logical notifications | Repository Maintainer | Test report |
+| Review-time improvement | Synthetic baseline versus timed demo | At least 25% median reduction | Hackathon Product Lead | Demo report |
 
 ## Deferred candidate use cases
 
@@ -84,7 +90,7 @@ Status: candidate beachhead; approval `TBD`.
 
 | Decision | Options considered | Evidence | Owner/approvers | Date | Revisit condition |
 | --- | --- | --- | --- | --- | --- |
-| `TBD` | `TBD` | `TBD` | `TBD` | `TBD` | `TBD` |
+| Select alert intelligence as the public sample | Knowledge refresh, engineering assistance, SRE planning, alert intelligence | Public cross-service evidence, synthetic personas, local-only side effects | Repository Owner | 2026-07-30 | Revisit after Gate G5 or if the demo cannot show evidence-backed value |
 
 ## Related documents
 
