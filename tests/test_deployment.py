@@ -3,14 +3,16 @@ from __future__ import annotations
 import asyncio
 import os
 from pathlib import Path
+from typing import Any
 
+import pytest
 import yaml
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from deploy import generate_secrets
+from deploy import generate_secrets, smoke
 from platform_agent_orchestrator.api import create_app
 from platform_agent_orchestrator.persistence import DatabaseReplayStore
 from platform_agent_orchestrator.runtime import _runtime_settings
@@ -131,3 +133,71 @@ def test_api_lifespan_runs_async_shutdown() -> None:
         assert client.get("/livez").status_code == 200
 
     assert stopped is True
+
+
+def test_smoke_waits_for_durable_worker_success(monkeypatch) -> None:
+    responses = iter(
+        [
+            {"status": "queued"},
+            {"status": "running"},
+            {"status": "succeeded"},
+        ]
+    )
+    requests: list[dict[str, Any]] = []
+
+    def request_json(**values: Any) -> dict[str, Any]:
+        requests.append(values)
+        return next(responses)
+
+    monkeypatch.setattr(smoke, "_request_json", request_json)
+    monkeypatch.setattr(smoke.time, "sleep", lambda _seconds: None)
+
+    smoke.wait_for_success(
+        base_url="http://sample",
+        secret="s" * 40,
+        run_id="run-123",
+        timeout_seconds=1,
+        poll_interval_seconds=0,
+    )
+
+    assert len(requests) == 3
+    assert all(request["method"] == "GET" for request in requests)
+    assert all(request["path"] == "/v1/runs/run-123" for request in requests)
+
+
+def test_smoke_fails_on_non_success_terminal_state(monkeypatch) -> None:
+    monkeypatch.setattr(
+        smoke,
+        "_request_json",
+        lambda **_values: {"status": "failed_terminal"},
+    )
+
+    with pytest.raises(RuntimeError, match="failed_terminal"):
+        smoke.wait_for_success(
+            base_url="http://sample",
+            secret="s" * 40,
+            run_id="run-123",
+            timeout_seconds=1,
+        )
+
+
+def test_smoke_uses_fresh_nonce_for_each_authenticated_read(monkeypatch) -> None:
+    nonces = iter(("A" * 22, "B" * 22))
+    monkeypatch.setattr(smoke.secrets, "token_urlsafe", lambda _size: next(nonces))
+    monkeypatch.setattr(smoke.time, "time", lambda: 1_700_000_000)
+
+    first = smoke._signed_headers(
+        secret="s" * 40,
+        method="GET",
+        path="/v1/runs/run-123",
+        body=b"",
+    )
+    second = smoke._signed_headers(
+        secret="s" * 40,
+        method="GET",
+        path="/v1/runs/run-123",
+        body=b"",
+    )
+
+    assert first["X-Webhook-Nonce"] != second["X-Webhook-Nonce"]
+    assert first["X-Webhook-Signature"] != second["X-Webhook-Signature"]
