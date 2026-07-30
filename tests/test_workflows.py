@@ -9,7 +9,7 @@ from platform_agent_orchestrator.registry import WorkflowRegistry
 
 
 def event(event_type: EventType, subject: str, payload: dict) -> DomainEvent:
-    return DomainEvent(
+    return DomainEvent.from_legacy(
         type=event_type,
         source="test",
         subject=subject,

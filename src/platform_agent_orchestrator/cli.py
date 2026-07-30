@@ -7,29 +7,33 @@ import json
 from typing import Any
 
 from platform_agent_orchestrator.adapters import DemoPlatformServices
-from platform_agent_orchestrator.contracts import DomainEvent, EventType
+from platform_agent_orchestrator.contracts import (
+    AlertReceivedPayloadV1,
+    DomainEvent,
+    EventEnvelopeV1,
+    EventType,
+)
 from platform_agent_orchestrator.observability import observability_from_env
 from platform_agent_orchestrator.registry import WorkflowRegistry
 
 
 def sample_events() -> dict[str, DomainEvent]:
     return {
-        "alert": DomainEvent(
-            type=EventType.ALERT_RECEIVED,
+        "alert": EventEnvelopeV1(
             source="sentry",
             subject="PAYMENT-502",
             idempotency_key="sentry:PAYMENT-502:2026-07-27T10",
-            payload={
-                "alert_id": "PAYMENT-502",
-                "title": "Payment dependency timeout",
-                "service": "order-service",
-                "severity": "critical",
-                "count": 240,
-                "users": 72,
-                "environment": "prod",
-            },
-        ),
-        "refresh": DomainEvent(
+            payload=AlertReceivedPayloadV1(
+                alert_id="PAYMENT-502",
+                title="Payment dependency timeout",
+                service="order-service",
+                severity="critical",
+                count=240,
+                users=72,
+                environment="prod",
+            ),
+        ).to_domain_event(),
+        "refresh": DomainEvent.from_legacy(
             type=EventType.PR_MERGED,
             source="bitbucket",
             subject="payment-service",
@@ -43,7 +47,7 @@ def sample_events() -> dict[str, DomainEvent]:
                 ],
             },
         ),
-        "sre": DomainEvent(
+        "sre": DomainEvent.from_legacy(
             type=EventType.SRE_TICKET_UPDATED,
             source="jira",
             subject="INF-1001",
@@ -56,7 +60,7 @@ def sample_events() -> dict[str, DomainEvent]:
                 "operation": "inspect",
             },
         ),
-        "engineering": DomainEvent(
+        "engineering": DomainEvent.from_legacy(
             type=EventType.ENGINEERING_QUESTION,
             source="code-atlas",
             subject="question-1",
