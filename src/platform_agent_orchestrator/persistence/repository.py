@@ -14,7 +14,7 @@ import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from platform_agent_orchestrator.contracts import EventEnvelopeV1
+from platform_agent_orchestrator.contracts import DomainEvent, EventEnvelopeV1
 from platform_agent_orchestrator.security import AuthorizationContext
 from platform_agent_orchestrator.service_contracts import (
     DeliveryStatus,
@@ -32,6 +32,10 @@ from .models import (
 
 
 class IdempotencyConflict(ValueError):
+    pass
+
+
+class LeaseLost(RuntimeError):
     pass
 
 
@@ -254,6 +258,176 @@ class EventRepository:
                 finished_at=run.finished_at,
                 version=run.version,
             )
+
+    async def load_claimed_event(self, claim: ClaimedJob) -> DomainEvent:
+        async with self._sessions() as session:
+            job = await session.scalar(
+                sa.select(DeliveryJobRecord).where(
+                    DeliveryJobRecord.id == claim.job_id,
+                    DeliveryJobRecord.run_id == claim.run_id,
+                    DeliveryJobRecord.status == DeliveryStatus.LEASED.value,
+                    DeliveryJobRecord.lease_token == claim.lease_token,
+                )
+            )
+            if job is None:
+                raise LeaseLost("delivery lease is no longer active")
+            run = await session.get(RunRecord, claim.run_id)
+            if run is None:
+                raise RuntimeError("claimed run is missing")
+            event = await session.get(EventRecord, run.event_id)
+            if event is None:
+                raise RuntimeError("claimed event is missing")
+            return DomainEvent(
+                id=event.id,
+                type=event.event_type,
+                source=event.source,
+                subject=event.subject,
+                occurred_at=event.occurred_at,
+                correlation_id=event.correlation_id,
+                idempotency_key=event.idempotency_key,
+                payload=event.payload,
+            )
+
+    async def record_success(self, claim: ClaimedJob, summary: str) -> None:
+        await self._record_outcome(
+            claim,
+            job_status=DeliveryStatus.COMPLETED,
+            run_status=RunStatus.SUCCEEDED,
+            outcome="succeeded",
+            summary=summary,
+            terminal=True,
+        )
+
+    async def record_interruption(self, claim: ClaimedJob, summary: str) -> None:
+        await self._record_outcome(
+            claim,
+            job_status=DeliveryStatus.COMPLETED,
+            run_status=RunStatus.WAITING_APPROVAL,
+            outcome="interrupted",
+            summary=summary,
+            interrupted=True,
+        )
+
+    async def record_retry(
+        self,
+        claim: ClaimedJob,
+        *,
+        category: str,
+        fingerprint: bytes,
+        available_at: datetime,
+    ) -> None:
+        await self._record_outcome(
+            claim,
+            job_status=DeliveryStatus.RETRY_WAIT,
+            run_status=RunStatus.RETRY_WAIT,
+            outcome="retryable_failure",
+            error_category=category,
+            error_fingerprint=fingerprint,
+            available_at=available_at,
+        )
+
+    async def record_terminal_failure(
+        self,
+        claim: ClaimedJob,
+        *,
+        category: str,
+        fingerprint: bytes,
+    ) -> None:
+        await self._record_outcome(
+            claim,
+            job_status=DeliveryStatus.FAILED_TERMINAL,
+            run_status=RunStatus.FAILED_TERMINAL,
+            outcome="terminal_failure",
+            error_category=category,
+            error_fingerprint=fingerprint,
+            terminal=True,
+        )
+
+    async def _record_outcome(
+        self,
+        claim: ClaimedJob,
+        *,
+        job_status: DeliveryStatus,
+        run_status: RunStatus,
+        outcome: str,
+        summary: str | None = None,
+        error_category: str | None = None,
+        error_fingerprint: bytes | None = None,
+        available_at: datetime | None = None,
+        terminal: bool = False,
+        interrupted: bool = False,
+    ) -> None:
+        if summary is not None and len(summary) > 16_384:
+            raise ValueError("run summary exceeds 16 KiB")
+        if error_fingerprint is not None and len(error_fingerprint) != 32:
+            raise ValueError("error fingerprint must be 32 bytes")
+        async with self._sessions() as session, session.begin():
+            now = await self._now(session)
+            job = await session.scalar(
+                sa.select(DeliveryJobRecord)
+                .where(
+                    DeliveryJobRecord.id == claim.job_id,
+                    DeliveryJobRecord.status == DeliveryStatus.LEASED.value,
+                    DeliveryJobRecord.lease_token == claim.lease_token,
+                )
+                .with_for_update()
+            )
+            if job is None:
+                raise LeaseLost("delivery outcome lost its lease fence")
+            attempt = await session.scalar(
+                sa.select(DeliveryAttemptRecord).where(
+                    DeliveryAttemptRecord.job_id == claim.job_id,
+                    DeliveryAttemptRecord.lease_token == claim.lease_token,
+                    DeliveryAttemptRecord.finished_at.is_(None),
+                )
+            )
+            if attempt is None:
+                raise LeaseLost("delivery outcome has no active attempt")
+            run = await session.get(RunRecord, claim.run_id)
+            if run is None:
+                raise RuntimeError("delivery outcome has no run")
+
+            lease_owner = job.lease_owner or "worker"
+            job.status = job_status.value
+            job.lease_token = None
+            job.lease_owner = None
+            job.lease_expires_at = None
+            job.last_heartbeat_at = None
+            job.last_error_category = error_category
+            job.last_error_fingerprint = error_fingerprint
+            job.available_at = available_at or job.available_at
+            job.completed_at = now if job_status == DeliveryStatus.COMPLETED or terminal else None
+            job.version += 1
+            attempt.finished_at = now
+            attempt.outcome = outcome
+            attempt.error_category = error_category
+            attempt.error_fingerprint = error_fingerprint
+            attempt.retry_available_at = available_at
+            attempt.version += 1
+            run.status = run_status.value
+            run.result_summary = summary
+            run.error_category = error_category
+            run.error_fingerprint = error_fingerprint
+            run.interrupted_at = now if interrupted else run.interrupted_at
+            run.finished_at = now if terminal else None
+            run.version += 1
+            session.add(
+                AuditEventRecord(
+                    scope_id=job.scope_id,
+                    actor_type="service",
+                    actor_id=lease_owner,
+                    action="delivery.outcome",
+                    outcome=outcome,
+                    reason_code=error_category or outcome,
+                    run_id=run.id,
+                    job_id=job.id,
+                    prior_state=DeliveryStatus.LEASED.value,
+                    new_state=job_status.value,
+                    action_hash=error_fingerprint,
+                    metadata_json={"attempt_number": attempt.attempt_number},
+                )
+            )
+            await session.flush()
 
     async def _claim_jobs(self, worker_id: str, *, limit: int) -> list[ClaimedJob]:
         async with self._sessions() as session, session.begin():

@@ -17,6 +17,7 @@ from .repository import (
     ClaimedJob,
     EventRepository,
     IdempotencyConflict,
+    LeaseLost,
     canonical_event_bytes,
     event_fingerprint,
 )
@@ -33,6 +34,7 @@ __all__ = [
     "EventRecord",
     "EventRepository",
     "IdempotencyConflict",
+    "LeaseLost",
     "IdempotencyClaimRecord",
     "RunRecord",
     "SideEffectRecord",

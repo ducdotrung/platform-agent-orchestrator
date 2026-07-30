@@ -19,9 +19,11 @@ from platform_agent_orchestrator.persistence import (
     EventRecord,
     EventRepository,
     IdempotencyConflict,
+    LeaseLost,
     RunRecord,
 )
 from platform_agent_orchestrator.security import AuthorizationContext
+from platform_agent_orchestrator.service_contracts import DeliveryStatus, RunStatus
 
 ROOT = Path(__file__).resolve().parents[1]
 NOW = datetime(2026, 7, 30, 12, 0, tzinfo=UTC)
@@ -188,6 +190,39 @@ def test_expired_lease_is_reclaimed_and_prior_attempt_is_closed(tmp_path: Path) 
                 assert attempts[0].outcome == "worker_lost"
                 assert attempts[0].finished_at is not None
                 assert attempts[1].finished_at is None
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_success_transition_is_atomic_and_fenced(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        repository, engine, sessions = await repository_for(tmp_path)
+        try:
+            admission = await repository.admit_event(envelope(), authorization())
+            claim = (await repository.claim_jobs("worker-a"))[0]
+            loaded = await repository.load_claimed_event(claim)
+
+            assert loaded.idempotency_key == "sample:orders:1"
+            await repository.record_success(claim, '{"status":"completed"}')
+
+            async with sessions() as session:
+                job = await session.get(DeliveryJobRecord, claim.job_id)
+                run = await session.get(RunRecord, admission.run_id)
+                attempt = await session.scalar(
+                    sa.select(DeliveryAttemptRecord).where(
+                        DeliveryAttemptRecord.job_id == claim.job_id
+                    )
+                )
+                assert job is not None and job.status == DeliveryStatus.COMPLETED.value
+                assert job.lease_token is None and job.completed_at is not None
+                assert run is not None and run.status == RunStatus.SUCCEEDED.value
+                assert run.finished_at is not None
+                assert attempt is not None and attempt.outcome == "succeeded"
+
+            with pytest.raises(LeaseLost):
+                await repository.record_success(claim, "duplicate")
         finally:
             await engine.dispose()
 
