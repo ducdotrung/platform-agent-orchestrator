@@ -47,6 +47,17 @@ an OAuth resource server with an explicit signed-webhook alternative. It fixes
 the public sample to one resource scope and keeps tokens, signatures, and
 authorization policy out of graph state.
 
+[ADR-0005](adr/0005-local-compose-deployment.md) deploys the Gate G2 sample
+locally with Compose: one API, one worker, one PostgreSQL server with two
+databases, explicit migration jobs, and no default external egress.
+
+[ADR-0006](adr/0006-external-adapter-contracts.md) keeps Gate G2 adapters
+deterministic and local. Gate G3 may consume the public Sock Shop project
+through a pinned, read-only `service-graph-toolkit` stdio MCP process; company
+alert, model, notification, publication, and action integrations stay disabled.
+
+The wider target topology remains:
+
 ```text
 webhook receivers / schedules
           |

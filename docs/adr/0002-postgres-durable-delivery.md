@@ -214,6 +214,7 @@ raw secret tool output.
 | `retryable_transient` | dependency timeout, rate limit, selected 5xx, connection reset, retryable database conflict | Persist full-jitter backoff and move job/run to `retry_wait` |
 | `worker_lost` | process death, missed heartbeat, lease expiry | Reclaim the expired job with a new token and incremented attempt count |
 | `terminal_input` | incompatible schema discovered after admission, invalid state invariant, unsupported workflow mapping | `failed_terminal`; no automatic retry |
+| `terminal_dependency` | incompatible adapter/tool version, missing capability, malformed or oversized dependency response | `failed_terminal` and dependency readiness false until compatible |
 | `terminal_policy` | authorization/evidence/policy violation | `failed_terminal` or `quarantined` according to policy |
 | `ambiguous_side_effect` | timeout after a notification request may have been accepted | Reconcile by side-effect key; never blind-retry |
 | `poison_or_security` | explicitly classified malicious content, repeated invariant failure for one event, unsafe serialization | `quarantined`; operator review required |
@@ -371,5 +372,6 @@ receipt store.
 - [ADR-0001: Async runtime and lifecycle](0001-async-runtime-and-lifecycle.md)
 - [ADR-0003: Persistence, checkpoints, and retention](0003-persistence-checkpoints-and-retention.md)
 - [ADR-0004: Authentication, authorization, and replay](0004-authentication-authorization-and-replay.md)
+- [ADR-0006: External adapter contracts](0006-external-adapter-contracts.md)
 - [Repository architecture](../architecture.md)
 - [Production productization review](../production-productization-review.md)

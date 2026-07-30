@@ -417,9 +417,10 @@ exposure cannot inherit the local bearer-token risk acceptance automatically.
 - Bearer-token theft remains possible during the short validity window.
 - The local principal fixture cannot validate company role/group governance.
 
-## Required deployment input for A07
+## Deployment inputs resolved by A07
 
-A07 must name:
+ADR-0005 and ADR-0006 resolve these inputs for the local public sample. Any
+other deployment must name:
 
 - trusted issuer, API audience, discovery/JWKS ownership, and rotation behavior;
 - TLS termination and trusted-proxy canonical URL rules;
@@ -458,4 +459,6 @@ duties, break glass, and security-event retention.
 - [RFC 9530: Digest Fields](https://www.rfc-editor.org/rfc/rfc9530.html)
 - [ADR-0002: PostgreSQL durable delivery](0002-postgres-durable-delivery.md)
 - [ADR-0003: Persistence, checkpoints, and retention](0003-persistence-checkpoints-and-retention.md)
+- [ADR-0005: Local Compose deployment](0005-local-compose-deployment.md)
+- [ADR-0006: External adapter contracts](0006-external-adapter-contracts.md)
 - [Repository architecture](../architecture.md)

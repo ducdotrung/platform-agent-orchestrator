@@ -135,3 +135,7 @@ application/checkpoint isolation, idempotency, audit, and retention.
 [ADR-0004](docs/adr/0004-authentication-authorization-and-replay.md) defines
 API and webhook identity, deterministic authorization, approval binding, and
 replay protection.
+[ADR-0005](docs/adr/0005-local-compose-deployment.md) defines the local-only
+Compose topology, migrations, health, shutdown, and secret boundaries.
+[ADR-0006](docs/adr/0006-external-adapter-contracts.md) defines async adapter
+contracts and the read-only public Sock Shop service-graph integration.
