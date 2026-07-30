@@ -65,6 +65,14 @@ class RegistryExecution:
     registry: WorkflowRegistry
 
     async def execute(self, claim: ClaimedJob) -> dict[str, Any]:
+        if claim.kind == "resume":
+            decision = await self.repository.load_claimed_resume(claim)
+            return await asyncio.to_thread(
+                self.registry.resume,
+                "alert",
+                thread_id=claim.run_id,
+                decision=decision,
+            )
         event = await self.repository.load_claimed_event(claim)
         return await asyncio.to_thread(
             self.registry.invoke,
@@ -137,7 +145,7 @@ class Worker:
                 pass
             return
 
-        summary = _bounded_summary(result)
+        summary = _bounded_summary(result, now=self.clock())
         try:
             if "__interrupt__" in result:
                 await self.outcomes.record_interruption(claim, summary)
@@ -156,9 +164,34 @@ def _error_fingerprint(category: RetryCategory, error: BaseException) -> bytes:
     return hashlib.sha256(identity.encode()).digest()
 
 
-def _bounded_summary(result: dict[str, Any]) -> str:
+def _bounded_summary(result: dict[str, Any], *, now: datetime | None = None) -> str:
     summary = {
         "status": result.get("status", "interrupted" if "__interrupt__" in result else "completed"),
         "interrupted": "__interrupt__" in result,
     }
+    if "__interrupt__" in result:
+        interrupt_value = _interrupt_value(result["__interrupt__"])
+        canonical = json.dumps(
+            interrupt_value,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode()
+        decided_by = now or datetime.now(UTC)
+        summary["approval"] = {
+            "approval_version": 1,
+            "kind": str(interrupt_value.get("kind", "workflow_review"))[:64],
+            "action_hash": hashlib.sha256(canonical).hexdigest(),
+            "expires_at": (decided_by + timedelta(minutes=15)).isoformat(),
+        }
     return json.dumps(summary, separators=(",", ":"), sort_keys=True)
+
+
+def _interrupt_value(raw: Any) -> dict[str, Any]:
+    values = list(raw) if isinstance(raw, (list, tuple)) else [raw]
+    if len(values) != 1:
+        raise ValueError("exactly one workflow interrupt is supported")
+    value = getattr(values[0], "value", values[0])
+    if not isinstance(value, dict):
+        raise ValueError("workflow interrupt must contain an object")
+    return value

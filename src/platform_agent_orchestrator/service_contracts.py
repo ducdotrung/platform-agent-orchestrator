@@ -258,6 +258,26 @@ class ApprovalContractV1(PublicContract):
         return self
 
 
+class PendingApprovalContractV1(PublicContract):
+    schema_version: Literal["1"] = "1"
+    run_id: str = Field(min_length=1, max_length=128)
+    approval_version: int = Field(ge=1)
+    kind: str = Field(min_length=1, max_length=64)
+    action_hash: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$")
+    expires_at: datetime
+    run_version: int = Field(ge=0)
+
+
+class ApprovalDecisionRequestV1(PublicContract):
+    schema_version: Literal["1"] = "1"
+    approval_version: int = Field(ge=1)
+    run_version: int = Field(ge=0)
+    decision: ApprovalDecision
+    reason: str = Field(min_length=1, max_length=2_048)
+    action_hash: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$")
+    idempotency_key: str = Field(min_length=1, max_length=512)
+
+
 class FeedbackContractV1(PublicContract):
     schema_version: Literal["1"] = "1"
     feedback_id: str = Field(min_length=1, max_length=128)

@@ -58,6 +58,7 @@ class ApplicationSettings(BaseModel):
     bind_port: int = Field(default=8080, ge=1, le=65_535)
     scope_id: str = Field(default="sock-shop-sample", min_length=1, max_length=128)
     allowed_sources: tuple[str, ...] = ("sample-sre-alert-agent",)
+    allowed_reviewers: tuple[str, ...] = ("sample-reviewer",)
     allowed_services: tuple[str, ...] = (
         "carts",
         "catalogue",
@@ -71,6 +72,7 @@ class ApplicationSettings(BaseModel):
     database_url: SecretStr | None = Field(default=None, repr=False)
     checkpoint_database_url: SecretStr | None = Field(default=None, repr=False)
     webhook_signing_secret: SecretStr | None = Field(default=None, repr=False)
+    reviewer_signing_secret: SecretStr | None = Field(default=None, repr=False)
     webhook_max_skew_seconds: int = Field(default=300, ge=30, le=900)
     webhook_nonce_ttl_seconds: int = Field(default=1_200, ge=120, le=3_600)
     external_egress_enabled: bool = False
@@ -88,6 +90,10 @@ class ApplicationSettings(BaseModel):
             "allowed_sources": _csv(
                 values.get("PLATFORM_ALLOWED_SOURCES"),
                 default=("sample-sre-alert-agent",),
+            ),
+            "allowed_reviewers": _csv(
+                values.get("PLATFORM_ALLOWED_REVIEWERS"),
+                default=("sample-reviewer",),
             ),
             "allowed_services": _csv(
                 values.get("PLATFORM_ALLOWED_SERVICES"),
@@ -108,6 +114,9 @@ class ApplicationSettings(BaseModel):
             ),
             "webhook_signing_secret": _optional_secret(
                 values.get("PLATFORM_WEBHOOK_SIGNING_SECRET")
+            ),
+            "reviewer_signing_secret": _optional_secret(
+                values.get("PLATFORM_REVIEWER_SIGNING_SECRET")
             ),
             "webhook_max_skew_seconds": values.get(
                 "PLATFORM_WEBHOOK_MAX_SKEW_SECONDS", "300"
@@ -132,6 +141,11 @@ class ApplicationSettings(BaseModel):
             and len(self.webhook_signing_secret.get_secret_value()) < 32
         ):
             raise ValueError("webhook signing secret must contain at least 32 characters")
+        if (
+            self.reviewer_signing_secret is not None
+            and len(self.reviewer_signing_secret.get_secret_value()) < 32
+        ):
+            raise ValueError("reviewer signing secret must contain at least 32 characters")
         if self.profile == DeploymentProfile.LOCAL:
             if self.role in {RuntimeRole.API, RuntimeRole.WORKER, RuntimeRole.MIGRATION}:
                 if self.database_url is None:
@@ -160,4 +174,5 @@ class ApplicationSettings(BaseModel):
             "database_configured": self.database_url is not None,
             "checkpoint_database_configured": self.checkpoint_database_url is not None,
             "webhook_authentication_configured": self.webhook_signing_secret is not None,
+            "reviewer_authentication_configured": self.reviewer_signing_secret is not None,
         }

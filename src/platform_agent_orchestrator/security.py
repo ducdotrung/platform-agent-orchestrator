@@ -111,6 +111,19 @@ class AuthorizationContext(BaseModel):
     policy_version: Literal["sample-admission-v1"] = "sample-admission-v1"
 
 
+class ReviewerAuthorizationContext(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    actor_type: Literal["reviewer"] = "reviewer"
+    actor_id: str = Field(min_length=1, max_length=256)
+    scope_id: str = Field(min_length=1, max_length=128)
+    permissions: tuple[Literal["approvals:read", "approvals:decide"], ...] = (
+        "approvals:read",
+        "approvals:decide",
+    )
+    policy_version: Literal["sample-reviewer-v1"] = "sample-reviewer-v1"
+
+
 def webhook_signature(
     *,
     secret: str,
@@ -138,6 +151,112 @@ def webhook_signature(
         )
     ).encode()
     return hmac.new(secret.encode(), canonical, hashlib.sha256).hexdigest()
+
+
+def reviewer_signature(
+    *,
+    secret: str,
+    reviewer_id: str,
+    timestamp: str,
+    nonce: str,
+    method: str,
+    path: str,
+    scope_id: str,
+    body: bytes,
+) -> str:
+    canonical = "\n".join(
+        (
+            "reviewer-v1",
+            reviewer_id,
+            timestamp,
+            nonce,
+            method.upper(),
+            path,
+            scope_id,
+            hashlib.sha256(body).hexdigest(),
+        )
+    ).encode()
+    return hmac.new(secret.encode(), canonical, hashlib.sha256).hexdigest()
+
+
+@dataclass(frozen=True)
+class ReviewerSecurity:
+    settings: ApplicationSettings
+    replay_store: ReplayStore
+    clock: Callable[[], datetime] = lambda: datetime.now(UTC)
+
+    @classmethod
+    def from_settings(cls, settings: ApplicationSettings) -> ReviewerSecurity:
+        if settings.profile == DeploymentProfile.DEMO:
+            replay_store: ReplayStore = InMemoryReplayStore()
+        else:
+            replay_store = UnavailableReplayStore()
+        return cls(settings=settings, replay_store=replay_store)
+
+    async def authorize_request(self, request: Request) -> ReviewerAuthorizationContext:
+        secret = self.settings.reviewer_signing_secret
+        if secret is None:
+            raise AdmissionSecurityError(
+                503,
+                "reviewer_security_unavailable",
+                "Reviewer authentication is not configured",
+            )
+        body = await request.body()
+        if body and request.headers.get("content-type", "").split(";", 1)[0] != "application/json":
+            raise AdmissionSecurityError(415, "content_type_unsupported", "JSON is required")
+        reviewer_id = AdmissionSecurity._required_header(
+            request, "x-reviewer-id", max_length=256
+        )
+        timestamp = AdmissionSecurity._required_header(
+            request, "x-reviewer-timestamp", max_length=16
+        )
+        nonce = AdmissionSecurity._required_header(request, "x-reviewer-nonce", max_length=128)
+        signature = AdmissionSecurity._required_header(
+            request, "x-reviewer-signature", max_length=64
+        )
+        scope_id = AdmissionSecurity._required_header(request, "x-team-scope", max_length=128)
+        if not timestamp.isascii() or not timestamp.isdigit():
+            AdmissionSecurity._unauthenticated()
+        now = self.clock()
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise RuntimeError("security clock must return a timezone-aware datetime")
+        if abs(int(now.timestamp()) - int(timestamp)) > self.settings.webhook_max_skew_seconds:
+            AdmissionSecurity._unauthenticated()
+        if (
+            _NONCE_PATTERN.fullmatch(nonce) is None
+            or _SIGNATURE_PATTERN.fullmatch(signature) is None
+        ):
+            AdmissionSecurity._unauthenticated()
+        expected = reviewer_signature(
+            secret=secret.get_secret_value(),
+            reviewer_id=reviewer_id,
+            timestamp=timestamp,
+            nonce=nonce,
+            method=request.method,
+            path=request.url.path,
+            scope_id=scope_id,
+            body=body,
+        )
+        if not hmac.compare_digest(signature, expected):
+            AdmissionSecurity._unauthenticated()
+        if reviewer_id not in self.settings.allowed_reviewers or scope_id != self.settings.scope_id:
+            AdmissionSecurity._forbidden()
+        try:
+            claimed = await self.replay_store.claim(
+                authenticator_id=f"reviewer:{reviewer_id}",
+                nonce_hash=hashlib.sha256(nonce.encode()).hexdigest(),
+                request_fingerprint=hashlib.sha256(expected.encode()).hexdigest(),
+                expires_at=now + timedelta(seconds=self.settings.webhook_nonce_ttl_seconds),
+            )
+        except ReplayStoreUnavailable as error:
+            raise AdmissionSecurityError(
+                503, "replay_protection_unavailable", "Replay protection is unavailable"
+            ) from error
+        if not claimed:
+            raise AdmissionSecurityError(
+                409, "reviewer_request_replayed", "Request replay rejected"
+            )
+        return ReviewerAuthorizationContext(actor_id=reviewer_id, scope_id=scope_id)
 
 
 @dataclass(frozen=True)
@@ -278,3 +397,8 @@ async def require_admission_authorization(request: Request) -> AuthorizationCont
 async def require_run_read_authorization(request: Request) -> AuthorizationContext:
     security: AdmissionSecurity = request.app.state.admission_security
     return await security.authorize_request(request, require_event=False)
+
+
+async def require_reviewer_authorization(request: Request) -> ReviewerAuthorizationContext:
+    security: ReviewerSecurity = request.app.state.reviewer_security
+    return await security.authorize_request(request)

@@ -17,14 +17,25 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from platform_agent_orchestrator.bootstrap import RuntimeDependencies, build_dependencies
 from platform_agent_orchestrator.contracts import EventEnvelopeV1
-from platform_agent_orchestrator.persistence import EventRepository, IdempotencyConflict
+from platform_agent_orchestrator.persistence import (
+    ApprovalConflict,
+    ApprovalExpired,
+    ApprovalNotFound,
+    ApprovalStale,
+    EventRepository,
+    IdempotencyConflict,
+)
 from platform_agent_orchestrator.security import (
     AdmissionSecurity,
     AdmissionSecurityError,
     AuthorizationContext,
+    ReviewerAuthorizationContext,
+    ReviewerSecurity,
     require_admission_authorization,
+    require_reviewer_authorization,
     require_run_read_authorization,
 )
+from platform_agent_orchestrator.service_contracts import ApprovalDecisionRequestV1
 from platform_agent_orchestrator.settings import (
     ApplicationSettings,
     DeploymentProfile,
@@ -151,6 +162,7 @@ def create_app(
     dependencies: RuntimeDependencies | None = None,
     readiness: ReadinessProbe | None = None,
     admission_security: AdmissionSecurity | None = None,
+    reviewer_security: ReviewerSecurity | None = None,
     event_repository: EventRepository | None = None,
 ) -> FastAPI:
     if settings is not None and dependencies is not None:
@@ -188,6 +200,9 @@ def create_app(
     )
     app.add_middleware(RequestSizeLimitMiddleware, max_bytes=application_settings.max_request_bytes)
     app.state.admission_security = admission_security or AdmissionSecurity.from_settings(
+        application_settings
+    )
+    app.state.reviewer_security = reviewer_security or ReviewerSecurity.from_settings(
         application_settings
     )
     app.state.event_repository = event_repository
@@ -260,6 +275,49 @@ def create_app(
         if run is None:
             return _public_error(404, "run_not_found", "Run not found")
         return JSONResponse(status_code=200, content=run.public_dump())
+
+    @app.get("/v1/approvals")
+    async def list_approvals(
+        authorization: Annotated[
+            ReviewerAuthorizationContext,
+            Depends(require_reviewer_authorization),
+        ],
+    ) -> JSONResponse:
+        repository: EventRepository | None = app.state.event_repository
+        if repository is None:
+            return _public_error(503, "persistence_unavailable", "Persistence is unavailable")
+        approvals = await repository.list_pending_approvals(authorization.scope_id)
+        return JSONResponse(
+            status_code=200,
+            content={
+                "schema_version": "1",
+                "items": [approval.public_dump() for approval in approvals],
+            },
+        )
+
+    @app.post("/v1/runs/{run_id}/approvals")
+    async def decide_approval(
+        run_id: str,
+        decision: ApprovalDecisionRequestV1,
+        authorization: Annotated[
+            ReviewerAuthorizationContext,
+            Depends(require_reviewer_authorization),
+        ],
+    ) -> JSONResponse:
+        repository: EventRepository | None = app.state.event_repository
+        if repository is None:
+            return _public_error(503, "persistence_unavailable", "Persistence is unavailable")
+        try:
+            approval = await repository.decide_approval(run_id, decision, authorization)
+        except ApprovalNotFound:
+            return _public_error(404, "approval_not_found", "Approval was not found")
+        except ApprovalExpired:
+            return _public_error(410, "approval_expired", "Approval has expired")
+        except ApprovalStale:
+            return _public_error(409, "approval_stale", "Approval state has changed")
+        except ApprovalConflict:
+            return _public_error(409, "approval_conflict", "Approval decision conflicts")
+        return JSONResponse(status_code=202, content=approval.public_dump())
 
     @app.get("/livez")
     async def live() -> dict[str, str]:

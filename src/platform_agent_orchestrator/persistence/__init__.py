@@ -14,6 +14,10 @@ from .models import (
 )
 from .repository import (
     AdmissionResult,
+    ApprovalConflict,
+    ApprovalExpired,
+    ApprovalNotFound,
+    ApprovalStale,
     ClaimedJob,
     EventRepository,
     IdempotencyConflict,
@@ -23,7 +27,11 @@ from .repository import (
 )
 
 __all__ = [
+    "ApprovalConflict",
+    "ApprovalExpired",
+    "ApprovalNotFound",
     "ApprovalRecord",
+    "ApprovalStale",
     "AdmissionResult",
     "AuditEventRecord",
     "AuthReplayClaimRecord",

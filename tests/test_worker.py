@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -90,6 +91,9 @@ def test_worker_records_success_and_interruption() -> None:
     assert success.calls[0][0] == "success"
     assert '"status":"notified"' in success.calls[0][1]["summary"]
     assert interrupted.calls[0][0] == "interruption"
+    summary = json.loads(interrupted.calls[0][1]["summary"])
+    assert summary["approval"]["kind"] == "review"
+    assert len(summary["approval"]["action_hash"]) == 64
 
 
 def test_worker_classifies_retryable_and_terminal_failures() -> None:

@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from langgraph.types import Command
+
 from platform_agent_orchestrator.adapters.ports import PlatformServices
 from platform_agent_orchestrator.checkpointing import checkpoint_config
 from platform_agent_orchestrator.contracts import DomainEvent, EventType
@@ -96,6 +98,20 @@ class WorkflowRegistry:
             value,
             data_type=data_type,
             comment=comment,
+        )
+
+    def resume(
+        self,
+        workflow: str,
+        *,
+        thread_id: str,
+        decision: dict[str, Any],
+    ) -> dict[str, Any]:
+        if workflow not in WORKFLOW_EVENT_TYPES:
+            raise ValueError(f"Unknown workflow: {workflow}")
+        return self.build(workflow).invoke(
+            Command(resume=decision),
+            config=checkpoint_config(thread_id),
         )
 
     @staticmethod

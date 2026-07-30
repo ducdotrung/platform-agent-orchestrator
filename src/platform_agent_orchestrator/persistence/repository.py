@@ -8,6 +8,7 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import uuid4
 
 import sqlalchemy as sa
@@ -17,16 +18,22 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from platform_agent_orchestrator.contracts import DomainEvent, EventEnvelopeV1
 from platform_agent_orchestrator.security import AuthorizationContext
 from platform_agent_orchestrator.service_contracts import (
+    ApprovalContractV1,
+    ApprovalDecision,
+    ApprovalDecisionRequestV1,
     DeliveryStatus,
+    PendingApprovalContractV1,
     RunContractV1,
     RunStatus,
 )
 
 from .models import (
+    ApprovalRecord,
     AuditEventRecord,
     DeliveryAttemptRecord,
     DeliveryJobRecord,
     EventRecord,
+    IdempotencyClaimRecord,
     RunRecord,
 )
 
@@ -36,6 +43,22 @@ class IdempotencyConflict(ValueError):
 
 
 class LeaseLost(RuntimeError):
+    pass
+
+
+class ApprovalNotFound(LookupError):
+    pass
+
+
+class ApprovalConflict(ValueError):
+    pass
+
+
+class ApprovalExpired(ValueError):
+    pass
+
+
+class ApprovalStale(ValueError):
     pass
 
 
@@ -287,6 +310,210 @@ class EventRepository:
                 idempotency_key=event.idempotency_key,
                 payload=event.payload,
             )
+
+    async def load_claimed_resume(self, claim: ClaimedJob) -> dict[str, Any]:
+        if claim.kind != "resume":
+            raise ValueError("resume payload requires a resume job")
+        async with self._sessions() as session:
+            job = await session.scalar(
+                sa.select(DeliveryJobRecord).where(
+                    DeliveryJobRecord.id == claim.job_id,
+                    DeliveryJobRecord.run_id == claim.run_id,
+                    DeliveryJobRecord.kind == "resume",
+                    DeliveryJobRecord.status == DeliveryStatus.LEASED.value,
+                    DeliveryJobRecord.lease_token == claim.lease_token,
+                )
+            )
+            if job is None:
+                raise LeaseLost("resume lease is no longer active")
+            approval_id = job.operation_key.removeprefix("approval:")
+            approval = await session.get(ApprovalRecord, approval_id)
+            if approval is None or approval.decision != ApprovalDecision.APPROVED.value:
+                raise RuntimeError("resume job has no approved decision")
+            return {
+                "approved": True,
+                "actor": approval.actor_id,
+                "reason": approval.reason,
+            }
+
+    async def list_pending_approvals(
+        self, scope_id: str
+    ) -> list[PendingApprovalContractV1]:
+        async with self._sessions() as session:
+            runs = list(
+                (
+                    await session.scalars(
+                        sa.select(RunRecord)
+                        .where(
+                            RunRecord.scope_id == scope_id,
+                            RunRecord.status == RunStatus.WAITING_APPROVAL.value,
+                        )
+                        .order_by(RunRecord.interrupted_at, RunRecord.id)
+                        .limit(100)
+                    )
+                ).all()
+            )
+            return [self._pending_approval(run) for run in runs]
+
+    async def decide_approval(
+        self,
+        run_id: str,
+        request: ApprovalDecisionRequestV1,
+        authorization: Any,
+    ) -> ApprovalContractV1:
+        request_fingerprint = hashlib.sha256(
+            request.model_dump_json(exclude={"idempotency_key"}).encode()
+        ).digest()
+        async with self._sessions() as session, session.begin():
+            now = await self._now(session)
+            run = await session.scalar(
+                sa.select(RunRecord)
+                .where(RunRecord.id == run_id, RunRecord.scope_id == authorization.scope_id)
+                .with_for_update()
+            )
+            if run is None:
+                raise ApprovalNotFound("approval run was not found")
+            if run.status != RunStatus.WAITING_APPROVAL.value:
+                raise ApprovalConflict("run is not waiting for approval")
+            pending = self._pending_approval(run)
+            if request.run_version != run.version:
+                raise ApprovalStale("run version changed")
+            if request.approval_version != pending.approval_version:
+                raise ApprovalStale("approval version changed")
+            if request.action_hash != pending.action_hash:
+                raise ApprovalConflict("approved action hash changed")
+            expires_at = pending.expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=UTC)
+            if now > expires_at:
+                raise ApprovalExpired("approval request expired")
+            existing = await session.scalar(
+                sa.select(ApprovalRecord).where(
+                    ApprovalRecord.run_id == run.id,
+                    ApprovalRecord.approval_version == request.approval_version,
+                )
+            )
+            if existing is not None:
+                raise ApprovalConflict("approval was already decided")
+            reused_key = await session.scalar(
+                sa.select(IdempotencyClaimRecord).where(
+                    IdempotencyClaimRecord.scope_id == authorization.scope_id,
+                    IdempotencyClaimRecord.boundary == "approval",
+                    IdempotencyClaimRecord.idempotency_key == request.idempotency_key,
+                )
+            )
+            if reused_key is not None:
+                raise ApprovalConflict("approval idempotency key was already used")
+
+            claim_id = str(uuid4())
+            approval_id = str(uuid4())
+            session.add(
+                IdempotencyClaimRecord(
+                    id=claim_id,
+                    scope_id=authorization.scope_id,
+                    boundary="approval",
+                    idempotency_key=request.idempotency_key,
+                    request_fingerprint=request_fingerprint,
+                    status="succeeded",
+                    resource_kind="approval",
+                    resource_id=approval_id,
+                    response_status=202,
+                    response_summary=request.decision.value,
+                    created_at=now,
+                    completed_at=now,
+                    expires_at=now + timedelta(days=30),
+                )
+            )
+            approval = ApprovalRecord(
+                id=approval_id,
+                scope_id=authorization.scope_id,
+                run_id=run.id,
+                approval_version=request.approval_version,
+                decision=request.decision.value,
+                actor_id=authorization.actor_id,
+                actor_type=authorization.actor_type,
+                reason=request.reason,
+                action_hash=bytes.fromhex(request.action_hash),
+                policy_version=authorization.policy_version,
+                decided_at=now,
+                expires_at=expires_at,
+                idempotency_claim_id=claim_id,
+            )
+            session.add(approval)
+            prior_state = run.status
+            if request.decision == ApprovalDecision.APPROVED:
+                session.add(
+                    DeliveryJobRecord(
+                        id=str(uuid4()),
+                        scope_id=run.scope_id,
+                        run_id=run.id,
+                        kind="resume",
+                        operation_key=f"approval:{approval_id}",
+                        status=DeliveryStatus.PENDING.value,
+                        available_at=now,
+                    )
+                )
+                run.status = RunStatus.QUEUED.value
+                run.result_summary = json.dumps(
+                    {"status": "approved", "approval_id": approval_id},
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
+            else:
+                run.status = RunStatus.REJECTED.value
+                run.result_summary = json.dumps(
+                    {"status": "rejected", "approval_id": approval_id},
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
+                run.finished_at = now
+            run.version += 1
+            session.add(
+                AuditEventRecord(
+                    scope_id=run.scope_id,
+                    actor_type=authorization.actor_type,
+                    actor_id=authorization.actor_id,
+                    action="approval.decide",
+                    outcome=request.decision.value,
+                    reason_code="reviewer_decision",
+                    run_id=run.id,
+                    approval_id=approval_id,
+                    prior_state=prior_state,
+                    new_state=run.status,
+                    action_hash=approval.action_hash,
+                    metadata_json={"approval_version": request.approval_version},
+                )
+            )
+            await session.flush()
+            return ApprovalContractV1(
+                approval_id=approval.id,
+                run_id=approval.run_id,
+                approval_version=approval.approval_version,
+                decision=ApprovalDecision(approval.decision),
+                actor_id=approval.actor_id,
+                actor_type=approval.actor_type,
+                reason=approval.reason,
+                action_hash=approval.action_hash.hex(),
+                policy_version=approval.policy_version,
+                decided_at=approval.decided_at,
+                expires_at=approval.expires_at,
+            )
+
+    @staticmethod
+    def _pending_approval(run: RunRecord) -> PendingApprovalContractV1:
+        try:
+            summary = json.loads(run.result_summary or "")
+            pending = summary["approval"]
+            return PendingApprovalContractV1(
+                run_id=run.id,
+                approval_version=pending["approval_version"],
+                kind=pending["kind"],
+                action_hash=pending["action_hash"],
+                expires_at=pending["expires_at"],
+                run_version=run.version,
+            )
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+            raise RuntimeError("waiting run has invalid approval metadata") from error
 
     async def record_success(self, claim: ClaimedJob, summary: str) -> None:
         await self._record_outcome(
