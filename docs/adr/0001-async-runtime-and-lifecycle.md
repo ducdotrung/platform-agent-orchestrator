@@ -39,9 +39,9 @@ I/O.
 2. FastAPI endpoints and lifespan hooks are async. Request handlers validate,
    authorize, persist an event/run/outbox transaction, and return; they never
    start durable workflow work with an in-process background task.
-3. The dispatcher and worker are separate long-lived async process roles. A
-   combined local-demo process may host both only through the same explicit
-   lifecycle components and shutdown rules.
+3. The worker is a long-lived async process role. If a later delivery topology
+   introduces a dispatcher, it is a separate role; ADR-0002 chooses direct
+   PostgreSQL job consumption with no dispatcher for the public sample.
 4. Production graph execution uses `await graph.ainvoke(...)`. Streaming may use
    `astream(...)` later, but streaming is not required for the first slice.
 5. Every port that may cross a process, network, database, model, filesystem,
@@ -246,3 +246,4 @@ code into unnecessary coroutines.
 - [Python 3.11 task cancellation and task groups](https://docs.python.org/3.11/library/asyncio-task.html)
 - [Repository architecture](../architecture.md)
 - [Production productization review](../production-productization-review.md)
+- [ADR-0002: PostgreSQL durable delivery](0002-postgres-durable-delivery.md)

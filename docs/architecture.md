@@ -28,9 +28,14 @@ checkpoint answers “where is this execution?” A knowledge snapshot answers
 ## Production topology
 
 The service runtime and I/O lifecycle follow
-[ADR-0001](adr/0001-async-runtime-and-lifecycle.md): API, dispatcher, worker,
-graph invocation, and I/O-bearing ports are async; deterministic CPU-light
-nodes remain synchronous.
+[ADR-0001](adr/0001-async-runtime-and-lifecycle.md): API, worker, any future
+dispatcher, graph invocation, and I/O-bearing ports are async; deterministic
+CPU-light nodes remain synchronous.
+
+For the public sample, [ADR-0002](adr/0002-postgres-durable-delivery.md)
+implements the admission outbox as a PostgreSQL durable job queue consumed
+directly by workers. There is no separate broker or dispatcher. Delivery is at
+least once; checkpoints and durable side-effect receipts remain separate.
 
 ```text
 webhook receivers / schedules
@@ -48,8 +53,9 @@ webhook receivers / schedules
           +---- Langfuse telemetry (optional)
 ```
 
-Use an outbox or queue between webhook receipt and workflow invocation. A
-checkpointer is not a replacement for an event broker.
+Use a durable job/outbox between webhook receipt and workflow invocation. A
+checkpointer is not a replacement for delivery state. A broker is a future
+scaling option, not a requirement for the public sample.
 
 Langfuse receives traces and evaluation scores through an optional backend. It
 does not replace checkpoints, the event outbox, action audit logs, or knowledge
