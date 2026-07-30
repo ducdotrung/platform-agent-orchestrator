@@ -1,0 +1,159 @@
+x-runtime-environment: &runtime-environment
+  PLATFORM_PROFILE: local
+  PLATFORM_ADAPTER_MODE: demo
+  PLATFORM_SCOPE_ID: sock-shop-sample
+  PLATFORM_ALLOWED_SOURCES: sample-sre-alert-agent
+  PLATFORM_ALLOWED_REVIEWERS: sample-reviewer
+  PLATFORM_ALLOWED_SERVICES: carts,catalogue,front-end,orders,payment,shipping,user
+  PLATFORM_EXTERNAL_EGRESS_ENABLED: "false"
+  ORCHESTRATOR_DATABASE_HOST: postgres
+  ORCHESTRATOR_DATABASE_USER: platform_agent
+  ORCHESTRATOR_DATABASE_NAME: platform_agent
+  CHECKPOINT_DATABASE_NAME: platform_agent_checkpoints
+  ORCHESTRATOR_DATABASE_PASSWORD_FILE: /run/secrets/database_password
+
+x-runtime-hardening: &runtime-hardening
+  read_only: true
+  tmpfs:
+    - /tmp:size=16m,mode=1777
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  init: true
+  cpus: "1.0"
+  mem_limit: 512m
+
+services:
+  postgres:
+    image: postgres:17.5-bookworm
+    environment:
+      POSTGRES_DB: platform_agent
+      POSTGRES_USER: platform_agent
+      POSTGRES_PASSWORD_FILE: /run/secrets/database_password
+    secrets:
+      - database_password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platform_agent -d platform_agent"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  db-bootstrap:
+    build: .
+    command: ["python", "deploy/bootstrap_databases.py"]
+    environment:
+      <<: *runtime-environment
+      PLATFORM_RUNTIME_ROLE: migration
+    secrets:
+      - database_password
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  app-migrate:
+    build: .
+    command: ["python", "deploy/app_migrate.py"]
+    environment:
+      <<: *runtime-environment
+      PLATFORM_RUNTIME_ROLE: migration
+    secrets:
+      - database_password
+    networks:
+      - backend
+    depends_on:
+      db-bootstrap:
+        condition: service_completed_successfully
+    restart: "no"
+
+  checkpoint-migrate:
+    build: .
+    command: ["python", "-c", "from platform_agent_orchestrator.runtime import checkpoint_migrate_main; checkpoint_migrate_main()"]
+    environment:
+      <<: *runtime-environment
+      PLATFORM_RUNTIME_ROLE: migration
+    secrets:
+      - database_password
+    networks:
+      - backend
+    depends_on:
+      db-bootstrap:
+        condition: service_completed_successfully
+    restart: "no"
+
+  api:
+    <<: *runtime-hardening
+    build: .
+    command: ["uvicorn", "platform_agent_orchestrator.runtime:build_api_app", "--factory", "--host", "0.0.0.0", "--port", "8080", "--timeout-graceful-shutdown", "15"]
+    environment:
+      <<: *runtime-environment
+      PLATFORM_RUNTIME_ROLE: api
+      PLATFORM_BIND_HOST: 0.0.0.0
+      PLATFORM_WEBHOOK_SIGNING_SECRET_FILE: /run/secrets/webhook_signing_secret
+      PLATFORM_REVIEWER_SIGNING_SECRET_FILE: /run/secrets/reviewer_signing_secret
+    secrets:
+      - database_password
+      - webhook_signing_secret
+      - reviewer_signing_secret
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks:
+      - backend
+      - ingress
+    depends_on:
+      app-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/readyz', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    stop_grace_period: 15s
+    restart: unless-stopped
+
+  worker:
+    <<: *runtime-hardening
+    build: .
+    command: ["python", "-c", "from platform_agent_orchestrator.runtime import worker_main; worker_main()"]
+    environment:
+      <<: *runtime-environment
+      PLATFORM_RUNTIME_ROLE: worker
+    secrets:
+      - database_password
+    networks:
+      - backend
+    depends_on:
+      app-migrate:
+        condition: service_completed_successfully
+      checkpoint-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "from pathlib import Path; raise SystemExit(0 if Path('/tmp/platform-agent-worker-ready').is_file() else 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    stop_grace_period: 45s
+    restart: unless-stopped
+
+secrets:
+  database_password:
+    file: .local-secrets/database_password
+  webhook_signing_secret:
+    file: .local-secrets/webhook_signing_secret
+  reviewer_signing_secret:
+    file: .local-secrets/reviewer_signing_secret
+
+volumes:
+  postgres-data:
+
+networks:
+  backend:
+    internal: true
+  ingress:

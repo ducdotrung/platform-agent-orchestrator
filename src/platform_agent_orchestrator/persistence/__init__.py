@@ -13,6 +13,7 @@ from .models import (
     RunRecord,
     SideEffectRecord,
 )
+from .replay import DatabaseReplayStore
 from .repository import (
     AdmissionResult,
     ApprovalConflict,
@@ -41,6 +42,7 @@ __all__ = [
     "ClaimedJob",
     "DeliveryAttemptRecord",
     "DeliveryJobRecord",
+    "DatabaseReplayStore",
     "EventRecord",
     "FeedbackRecord",
     "EventRepository",

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -65,6 +65,7 @@ class ReadinessProbe(Protocol):
 class ConfigurationReadinessProbe:
     settings: ApplicationSettings
     persistence_ready: bool = False
+    replay_ready: bool = False
 
     async def check(self) -> ReadinessReport:
         authentication = (
@@ -81,13 +82,18 @@ class ConfigurationReadinessProbe:
                     "persistence": "ready" if self.persistence_ready else "unavailable",
                 },
             )
+        ready = (
+            authentication == "ready"
+            and self.persistence_ready
+            and self.replay_ready
+        )
         return ReadinessReport(
-            ready=False,
+            ready=ready,
             checks={
                 "configuration": "ready",
                 "authentication": authentication,
-                "persistence": "not_initialized",
-                "replay_store": "not_initialized",
+                "persistence": "ready" if self.persistence_ready else "not_initialized",
+                "replay_store": "ready" if self.replay_ready else "not_initialized",
             },
         )
 
@@ -217,6 +223,7 @@ def create_app(
     event_repository: EventRepository | None = None,
     service_metrics: ServiceMetrics | None = None,
     public_event_logger: PublicEventLogger | None = None,
+    async_shutdown: Callable[[], Awaitable[None]] | None = None,
 ) -> FastAPI:
     if settings is not None and dependencies is not None:
         raise ValueError("pass settings or dependencies, not both")
@@ -226,6 +233,7 @@ def create_app(
     readiness_probe = readiness or ConfigurationReadinessProbe(
         application_settings,
         persistence_ready=event_repository is not None,
+        replay_ready=admission_security is not None,
     )
     owned_dependencies: RuntimeDependencies | None = None
     metrics = service_metrics or ServiceMetrics()
@@ -244,6 +252,8 @@ def create_app(
         finally:
             if owned_dependencies is not None:
                 owned_dependencies.shutdown()
+            if async_shutdown is not None:
+                await async_shutdown()
 
     app = FastAPI(
         title="Platform Agent Orchestrator",

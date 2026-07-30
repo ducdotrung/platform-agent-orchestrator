@@ -77,6 +77,24 @@ python -m platform_agent_orchestrator demo sre
 python -m platform_agent_orchestrator demo engineering
 ```
 
+## Local durable stack
+
+The public sample includes a loopback-only Compose stack with PostgreSQL,
+one-shot application/checkpoint migrations, the API, and one worker. Generate
+ignored local secrets before starting it:
+
+```bash
+python deploy/generate_secrets.py
+docker compose up --build --detach --wait api worker
+PYTHONPATH=src python deploy/smoke.py
+```
+
+Inspect `/readyz` and `/metrics` on `127.0.0.1:8080`. Normal teardown preserves
+the database volume: `docker compose down`. Use `--volumes` only when you
+explicitly intend to delete disposable sample data. The worker uses local demo
+evidence and a receipt-only notifier; no company endpoint or mutation tool is
+enabled.
+
 The service factory is `platform_agent_orchestrator.api:create_app`. It exposes
 `/livez` for process liveness and `/readyz` for admission dependency readiness;
 these signals are intentionally independent.
