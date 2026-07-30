@@ -154,7 +154,9 @@ class AdmissionSecurity:
             replay_store = UnavailableReplayStore()
         return cls(settings=settings, replay_store=replay_store)
 
-    async def authorize_request(self, request: Request) -> AuthorizationContext:
+    async def authorize_request(
+        self, request: Request, *, require_event: bool = True
+    ) -> AuthorizationContext:
         secret = self.settings.webhook_signing_secret
         if secret is None:
             raise AdmissionSecurityError(
@@ -163,7 +165,7 @@ class AdmissionSecurity:
                 "Admission authentication is not configured",
             )
         content_type = request.headers.get("content-type", "").split(";", 1)[0]
-        if content_type.strip().lower() != "application/json":
+        if require_event and content_type.strip().lower() != "application/json":
             raise AdmissionSecurityError(415, "content_type_unsupported", "JSON is required")
 
         key_id = self._required_header(request, "x-webhook-key-id", max_length=128)
@@ -203,21 +205,23 @@ class AdmissionSecurity:
         if not hmac.compare_digest(supplied_signature, expected_signature):
             self._unauthenticated()
 
-        try:
-            envelope = EventEnvelopeV1.model_validate_json(body)
-        except ValidationError as error:
-            raise AdmissionSecurityError(
-                422, "event_validation_failed", "Event validation failed"
-            ) from error
-
-        if key_id not in self.settings.allowed_sources or envelope.source != key_id:
+        if key_id not in self.settings.allowed_sources:
             self._forbidden()
-        if workflow != "alert" or envelope.type != "alert.received":
+        if workflow != "alert":
             self._forbidden()
         if scope_id != self.settings.scope_id:
             self._forbidden()
-        if envelope.payload.service not in self.settings.allowed_services:
-            self._forbidden()
+        if require_event:
+            try:
+                envelope = EventEnvelopeV1.model_validate_json(body)
+            except ValidationError as error:
+                raise AdmissionSecurityError(
+                    422, "event_validation_failed", "Event validation failed"
+                ) from error
+            if envelope.source != key_id or envelope.type != "alert.received":
+                self._forbidden()
+            if envelope.payload.service not in self.settings.allowed_services:
+                self._forbidden()
 
         nonce_hash = hashlib.sha256(nonce.encode()).hexdigest()
         request_fingerprint = hashlib.sha256(
@@ -269,3 +273,8 @@ class AdmissionSecurity:
 async def require_admission_authorization(request: Request) -> AuthorizationContext:
     security: AdmissionSecurity = request.app.state.admission_security
     return await security.authorize_request(request)
+
+
+async def require_run_read_authorization(request: Request) -> AuthorizationContext:
+    security: AdmissionSecurity = request.app.state.admission_security
+    return await security.authorize_request(request, require_event=False)

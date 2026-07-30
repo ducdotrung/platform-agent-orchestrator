@@ -16,7 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from platform_agent_orchestrator.contracts import EventEnvelopeV1
 from platform_agent_orchestrator.security import AuthorizationContext
-from platform_agent_orchestrator.service_contracts import DeliveryStatus, RunStatus
+from platform_agent_orchestrator.service_contracts import (
+    DeliveryStatus,
+    RunContractV1,
+    RunStatus,
+)
 
 from .models import (
     AuditEventRecord,
@@ -224,6 +228,32 @@ class EventRepository:
             async with self._sqlite_claim_lock:
                 return await self._claim_jobs(worker_id, limit=limit)
         return await self._claim_jobs(worker_id, limit=limit)
+
+    async def get_run(self, run_id: str, scope_id: str) -> RunContractV1 | None:
+        async with self._sessions() as session:
+            run = await session.scalar(
+                sa.select(RunRecord).where(
+                    RunRecord.id == run_id,
+                    RunRecord.scope_id == scope_id,
+                )
+            )
+            if run is None:
+                return None
+            return RunContractV1(
+                run_id=run.id,
+                event_id=run.event_id,
+                scope_id=run.scope_id,
+                thread_id=run.thread_id,
+                workflow=run.workflow,
+                workflow_contract_version=run.workflow_contract_version,
+                status=RunStatus(run.status),
+                result_summary=run.result_summary,
+                created_at=run.created_at,
+                started_at=run.started_at,
+                interrupted_at=run.interrupted_at,
+                finished_at=run.finished_at,
+                version=run.version,
+            )
 
     async def _claim_jobs(self, worker_id: str, *, limit: int) -> list[ClaimedJob]:
         async with self._sessions() as session, session.begin():

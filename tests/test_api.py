@@ -48,6 +48,7 @@ def test_demo_profile_is_unready_without_admission_authentication() -> None:
         "authentication": "unconfigured",
         "demo_adapters": "ready",
         "replay_store": "process_local_demo",
+        "persistence": "unavailable",
     }
 
 

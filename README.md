@@ -86,6 +86,10 @@ source, alert-workflow, Sock Shop service, and team-scope allow-lists. The demo
 profile has a process-local replay fence for tests only; local service mode
 fails readiness until the durable replay store is connected.
 
+With a repository and replay store connected, `POST /v1/events` returns a
+stable run ID and `GET /v1/runs/{run_id}` returns its bounded same-scope status.
+Only the versioned alert event maps to the `alert` workflow.
+
 ## Workflows
 
 ### Alert analysis

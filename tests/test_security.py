@@ -268,5 +268,6 @@ def test_ready_requires_authentication_configuration() -> None:
     with TestClient(create_app(settings=settings())) as client:
         response = client.get("/readyz")
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     assert response.json()["checks"]["authentication"] == "ready"
+    assert response.json()["checks"]["persistence"] == "unavailable"

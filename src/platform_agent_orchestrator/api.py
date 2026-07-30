@@ -6,17 +6,25 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from http import HTTPStatus
-from typing import Protocol
+from typing import Annotated, Protocol
 from uuid import uuid4
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from platform_agent_orchestrator.bootstrap import RuntimeDependencies, build_dependencies
-from platform_agent_orchestrator.security import AdmissionSecurity, AdmissionSecurityError
+from platform_agent_orchestrator.contracts import EventEnvelopeV1
+from platform_agent_orchestrator.persistence import EventRepository, IdempotencyConflict
+from platform_agent_orchestrator.security import (
+    AdmissionSecurity,
+    AdmissionSecurityError,
+    AuthorizationContext,
+    require_admission_authorization,
+    require_run_read_authorization,
+)
 from platform_agent_orchestrator.settings import (
     ApplicationSettings,
     DeploymentProfile,
@@ -36,6 +44,7 @@ class ReadinessProbe(Protocol):
 @dataclass(frozen=True)
 class ConfigurationReadinessProbe:
     settings: ApplicationSettings
+    persistence_ready: bool = False
 
     async def check(self) -> ReadinessReport:
         authentication = (
@@ -43,12 +52,13 @@ class ConfigurationReadinessProbe:
         )
         if self.settings.profile == DeploymentProfile.DEMO:
             return ReadinessReport(
-                ready=authentication == "ready",
+                ready=authentication == "ready" and self.persistence_ready,
                 checks={
                     "configuration": "ready",
                     "authentication": authentication,
                     "demo_adapters": "ready",
                     "replay_store": "process_local_demo",
+                    "persistence": "ready" if self.persistence_ready else "unavailable",
                 },
             )
         return ReadinessReport(
@@ -141,13 +151,17 @@ def create_app(
     dependencies: RuntimeDependencies | None = None,
     readiness: ReadinessProbe | None = None,
     admission_security: AdmissionSecurity | None = None,
+    event_repository: EventRepository | None = None,
 ) -> FastAPI:
     if settings is not None and dependencies is not None:
         raise ValueError("pass settings or dependencies, not both")
     application_settings = settings or (
         dependencies.settings if dependencies is not None else ApplicationSettings.from_env()
     )
-    readiness_probe = readiness or ConfigurationReadinessProbe(application_settings)
+    readiness_probe = readiness or ConfigurationReadinessProbe(
+        application_settings,
+        persistence_ready=event_repository is not None,
+    )
     owned_dependencies: RuntimeDependencies | None = None
 
     @asynccontextmanager
@@ -176,6 +190,7 @@ def create_app(
     app.state.admission_security = admission_security or AdmissionSecurity.from_settings(
         application_settings
     )
+    app.state.event_repository = event_repository
 
     @app.exception_handler(AdmissionSecurityError)
     async def admission_security_error(
@@ -200,6 +215,51 @@ def create_app(
     @app.exception_handler(Exception)
     async def unexpected_error(_request: Request, _error: Exception) -> JSONResponse:
         return _public_error(500, "internal_error", "Internal server error")
+
+    @app.post("/v1/events")
+    async def admit_event(
+        envelope: EventEnvelopeV1,
+        authorization: Annotated[
+            AuthorizationContext,
+            Depends(require_admission_authorization),
+        ],
+    ) -> JSONResponse:
+        repository: EventRepository | None = app.state.event_repository
+        if repository is None:
+            return _public_error(503, "persistence_unavailable", "Persistence is unavailable")
+        try:
+            result = await repository.admit_event(envelope, authorization)
+        except IdempotencyConflict:
+            return _public_error(
+                409,
+                "idempotency_conflict",
+                "Idempotency key conflicts with an accepted event",
+            )
+        return JSONResponse(
+            status_code=200 if result.duplicate else 202,
+            content={
+                "schema_version": "1",
+                "run_id": result.run_id,
+                "status": result.status.value,
+                "duplicate": result.duplicate,
+            },
+        )
+
+    @app.get("/v1/runs/{run_id}")
+    async def get_run(
+        run_id: str,
+        authorization: Annotated[
+            AuthorizationContext,
+            Depends(require_run_read_authorization),
+        ],
+    ) -> JSONResponse:
+        repository: EventRepository | None = app.state.event_repository
+        if repository is None:
+            return _public_error(503, "persistence_unavailable", "Persistence is unavailable")
+        run = await repository.get_run(run_id, authorization.scope_id)
+        if run is None:
+            return _public_error(404, "run_not_found", "Run not found")
+        return JSONResponse(status_code=200, content=run.public_dump())
 
     @app.get("/livez")
     async def live() -> dict[str, str]:
