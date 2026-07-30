@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -43,6 +43,11 @@ from platform_agent_orchestrator.service_contracts import (
 from platform_agent_orchestrator.settings import (
     ApplicationSettings,
     DeploymentProfile,
+)
+from platform_agent_orchestrator.telemetry import (
+    PublicEventLogger,
+    ServiceMetrics,
+    bounded_route,
 )
 
 
@@ -160,6 +165,48 @@ class RequestSizeLimitMiddleware:
         await self.app(scope, bounded_receive, send)
 
 
+class OperationalTelemetryMiddleware:
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        metrics: ServiceMetrics,
+        event_logger: PublicEventLogger,
+    ) -> None:
+        self.app = app
+        self.metrics = metrics
+        self.event_logger = event_logger
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        status_code = 500
+
+        async def observe_send(message: Message) -> None:
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = int(message["status"])
+            await send(message)
+
+        try:
+            await self.app(scope, receive, observe_send)
+        finally:
+            method = str(scope.get("method", "UNKNOWN"))
+            route = bounded_route(str(scope.get("path", "")))
+            status = str(status_code)
+            try:
+                self.metrics.http_requests.labels(method, route, status).inc()
+                self.event_logger.info(
+                    "http_request",
+                    method=method,
+                    route=route,
+                    status=status,
+                )
+            except Exception:
+                pass
+
+
 def create_app(
     *,
     settings: ApplicationSettings | None = None,
@@ -168,6 +215,8 @@ def create_app(
     admission_security: AdmissionSecurity | None = None,
     reviewer_security: ReviewerSecurity | None = None,
     event_repository: EventRepository | None = None,
+    service_metrics: ServiceMetrics | None = None,
+    public_event_logger: PublicEventLogger | None = None,
 ) -> FastAPI:
     if settings is not None and dependencies is not None:
         raise ValueError("pass settings or dependencies, not both")
@@ -179,6 +228,8 @@ def create_app(
         persistence_ready=event_repository is not None,
     )
     owned_dependencies: RuntimeDependencies | None = None
+    metrics = service_metrics or ServiceMetrics()
+    event_logger = public_event_logger or PublicEventLogger()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -203,6 +254,11 @@ def create_app(
         lifespan=lifespan,
     )
     app.add_middleware(RequestSizeLimitMiddleware, max_bytes=application_settings.max_request_bytes)
+    app.add_middleware(
+        OperationalTelemetryMiddleware,
+        metrics=metrics,
+        event_logger=event_logger,
+    )
     app.state.admission_security = admission_security or AdmissionSecurity.from_settings(
         application_settings
     )
@@ -210,6 +266,7 @@ def create_app(
         application_settings
     )
     app.state.event_repository = event_repository
+    app.state.service_metrics = metrics
 
     @app.exception_handler(AdmissionSecurityError)
     async def admission_security_error(
@@ -360,12 +417,21 @@ def create_app(
     @app.get("/readyz")
     async def ready() -> JSONResponse:
         report = await readiness_probe.check()
+        for dependency, state in report.checks.items():
+            metrics.dependency_ready.labels(dependency).set(1 if state == "ready" else 0)
         return JSONResponse(
             status_code=200 if report.ready else 503,
             content={
                 "status": "ready" if report.ready else "not_ready",
                 "checks": report.checks,
             },
+        )
+
+    @app.get("/metrics")
+    async def prometheus_metrics() -> Response:
+        return Response(
+            content=metrics.render(),
+            media_type="text/plain; version=0.0.4; charset=utf-8",
         )
 
     return app

@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from platform_agent_orchestrator.adapters.ports import NotificationPort
 from platform_agent_orchestrator.persistence import AuditEventRecord, SideEffectRecord
+from platform_agent_orchestrator.telemetry import PublicEventLogger, ServiceMetrics
 
 
 class SideEffectConflict(ValueError):
@@ -65,10 +66,14 @@ class DatabaseSideEffectStore:
         *,
         claim_duration: timedelta = timedelta(seconds=30),
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        metrics: ServiceMetrics | None = None,
+        event_logger: PublicEventLogger | None = None,
     ) -> None:
         self._sessions = sessions
         self._claim_duration = claim_duration
         self._clock = clock
+        self._metrics = metrics
+        self._event_logger = event_logger
 
     def reserve_notification(
         self,
@@ -175,6 +180,7 @@ class DatabaseSideEffectStore:
                 )
                 claim = SideEffectClaim(effect.id, token)
         if ambiguous:
+            self._observe("unknown")
             raise AmbiguousSideEffect("expired notification claim requires reconciliation")
         return claim
 
@@ -200,6 +206,7 @@ class DatabaseSideEffectStore:
                 prior_state="in_progress",
                 new_state="succeeded",
             )
+        self._observe("succeeded")
 
     def mark_unknown(self, claim: SideEffectClaim) -> None:
         if not claim.claim_token:
@@ -218,6 +225,20 @@ class DatabaseSideEffectStore:
                 prior_state="in_progress",
                 new_state="unknown",
             )
+        self._observe("unknown")
+
+    def _observe(self, outcome: str) -> None:
+        try:
+            if self._metrics is not None:
+                self._metrics.side_effect_outcomes.labels(outcome).inc()
+            if self._event_logger is not None:
+                self._event_logger.info(
+                    "side_effect_outcome",
+                    action="notification",
+                    outcome=outcome,
+                )
+        except Exception:
+            pass
 
     @staticmethod
     def _load_claim(session: Session, claim: SideEffectClaim) -> SideEffectRecord:

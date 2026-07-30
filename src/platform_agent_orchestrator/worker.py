@@ -14,6 +14,7 @@ from platform_agent_orchestrator.dispatcher import DatabaseJobDispatcher, Dispat
 from platform_agent_orchestrator.persistence import ClaimedJob, EventRepository, LeaseLost
 from platform_agent_orchestrator.registry import WorkflowRegistry
 from platform_agent_orchestrator.service_contracts import RetryCategory
+from platform_agent_orchestrator.telemetry import PublicEventLogger, ServiceMetrics
 
 
 class WorkflowExecution(Protocol):
@@ -90,6 +91,8 @@ class Worker:
     outcomes: OutcomeStore
     retry_delay: timedelta = timedelta(seconds=1)
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)
+    metrics: ServiceMetrics | None = None
+    event_logger: PublicEventLogger | None = None
     _stopping: asyncio.Event = field(default_factory=asyncio.Event, init=False, repr=False)
 
     async def run_once(self) -> int:
@@ -111,6 +114,7 @@ class Worker:
         try:
             result = await self.executor.execute(claim)
         except LeaseLost:
+            self._observe("lease_lost")
             return
         except RetryableWorkerError as error:
             try:
@@ -122,6 +126,7 @@ class Worker:
                 )
             except LeaseLost:
                 pass
+            self._observe("retry")
             return
         except TerminalWorkerError as error:
             try:
@@ -132,6 +137,7 @@ class Worker:
                 )
             except LeaseLost:
                 pass
+            self._observe("terminal_failure")
             return
         except Exception as error:
             category = RetryCategory.TERMINAL_DEPENDENCY
@@ -143,20 +149,32 @@ class Worker:
                 )
             except LeaseLost:
                 pass
+            self._observe("terminal_failure")
             return
 
         summary = _bounded_summary(result, now=self.clock())
         try:
             if "__interrupt__" in result:
                 await self.outcomes.record_interruption(claim, summary)
+                self._observe("interrupted")
             else:
                 await self.outcomes.record_success(claim, summary)
+                self._observe("succeeded")
         except LeaseLost:
-            pass
+            self._observe("lease_lost")
 
     async def shutdown(self) -> None:
         self._stopping.set()
         await self.dispatcher.shutdown()
+
+    def _observe(self, outcome: str) -> None:
+        try:
+            if self.metrics is not None:
+                self.metrics.worker_outcomes.labels(outcome).inc()
+            if self.event_logger is not None:
+                self.event_logger.info("worker_outcome", outcome=outcome, workflow="alert")
+        except Exception:
+            pass
 
 
 def _error_fingerprint(category: RetryCategory, error: BaseException) -> bytes:

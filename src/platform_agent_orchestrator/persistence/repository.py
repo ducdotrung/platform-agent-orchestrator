@@ -28,6 +28,7 @@ from platform_agent_orchestrator.service_contracts import (
     RunContractV1,
     RunStatus,
 )
+from platform_agent_orchestrator.telemetry import PublicEventLogger, ServiceMetrics
 
 from .models import (
     ApprovalRecord,
@@ -114,10 +115,14 @@ class EventRepository:
         *,
         lease_duration: timedelta = timedelta(seconds=30),
         clock: Callable[[], datetime] | None = None,
+        metrics: ServiceMetrics | None = None,
+        event_logger: PublicEventLogger | None = None,
     ) -> None:
         self._sessions = sessions
         self._lease_duration = lease_duration
         self._clock = clock
+        self._metrics = metrics
+        self._event_logger = event_logger
         self._sqlite_claim_lock = asyncio.Lock()
 
     async def admit_event(
@@ -127,12 +132,15 @@ class EventRepository:
     ) -> AdmissionResult:
         fingerprint = event_fingerprint(envelope)
         try:
-            return await self._insert_admission(envelope, authorization, fingerprint)
+            result = await self._insert_admission(envelope, authorization, fingerprint)
         except IntegrityError as error:
             try:
-                return await self._load_duplicate(envelope, authorization, fingerprint)
+                result = await self._load_duplicate(envelope, authorization, fingerprint)
             except RuntimeError:
                 raise error from None
+        if not result.duplicate:
+            self._run_transition(RunStatus.QUEUED.value)
+        return result
 
     async def _insert_admission(
         self,
@@ -260,8 +268,15 @@ class EventRepository:
             dialect = probe.bind.dialect.name if probe.bind is not None else "unknown"
         if dialect == "sqlite":
             async with self._sqlite_claim_lock:
-                return await self._claim_jobs(worker_id, limit=limit)
-        return await self._claim_jobs(worker_id, limit=limit)
+                claims = await self._claim_jobs(worker_id, limit=limit)
+        else:
+            claims = await self._claim_jobs(worker_id, limit=limit)
+        try:
+            if self._metrics is not None:
+                self._metrics.delivery_claims.labels("claimed").inc(len(claims))
+        except Exception:
+            pass
+        return claims
 
     async def get_run(self, run_id: str, scope_id: str) -> RunContractV1 | None:
         async with self._sessions() as session:
@@ -492,7 +507,7 @@ class EventRepository:
                 )
             )
             await session.flush()
-            return ApprovalContractV1(
+            contract = ApprovalContractV1(
                 approval_id=approval.id,
                 run_id=approval.run_id,
                 approval_version=approval.approval_version,
@@ -505,6 +520,18 @@ class EventRepository:
                 decided_at=approval.decided_at,
                 expires_at=approval.expires_at,
             )
+        try:
+            if self._metrics is not None:
+                self._metrics.approval_decisions.labels(request.decision.value).inc()
+        except Exception:
+            pass
+        new_status = (
+            RunStatus.QUEUED.value
+            if request.decision == ApprovalDecision.APPROVED
+            else RunStatus.REJECTED.value
+        )
+        self._run_transition(new_status)
+        return contract
 
     @staticmethod
     def _pending_approval(run: RunRecord) -> PendingApprovalContractV1:
@@ -568,7 +595,7 @@ class EventRepository:
                 )
             )
             await session.flush()
-            return FeedbackContractV1(
+            contract = FeedbackContractV1(
                 feedback_id=feedback_id,
                 run_id=run.id,
                 actor_id=authorization.actor_id,
@@ -578,6 +605,12 @@ class EventRepository:
                 created_at=now,
                 metadata=request.metadata,
             )
+        try:
+            if self._metrics is not None:
+                self._metrics.feedback_records.labels(request.rating.value).inc()
+        except Exception:
+            pass
+        return contract
 
     async def record_success(self, claim: ClaimedJob, summary: str) -> None:
         await self._record_outcome(
@@ -719,6 +752,7 @@ class EventRepository:
                 )
             )
             await session.flush()
+        self._run_transition(run_status.value)
 
     async def _claim_jobs(self, worker_id: str, *, limit: int) -> list[ClaimedJob]:
         async with self._sessions() as session, session.begin():
@@ -823,3 +857,12 @@ class EventRepository:
         if now.tzinfo is None:
             now = now.replace(tzinfo=UTC)
         return now
+
+    def _run_transition(self, status: str) -> None:
+        try:
+            if self._metrics is not None:
+                self._metrics.run_transitions.labels(status).inc()
+            if self._event_logger is not None:
+                self._event_logger.info("run_transition", status=status, workflow="alert")
+        except Exception:
+            pass
