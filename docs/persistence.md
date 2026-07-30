@@ -20,3 +20,9 @@ The repository test suite executes upgrade/downgrade and portable constraints
 with SQLite and compiles schema-qualified PostgreSQL DDL offline. This does not
 claim PostgreSQL integration coverage. Gate G2 additionally requires the B16
 Compose migration smoke test against the pinned PostgreSQL image.
+
+`EventRepository` commits event, initial run, pending delivery job, and audit
+record in one transaction. Its claim path uses ordered `FOR UPDATE SKIP LOCKED`
+on PostgreSQL, closes an expired active attempt as `worker_lost`, and creates a
+new lease token and attempt. The SQLite test shim serializes claims only because
+SQLite does not implement this PostgreSQL lock behavior.
