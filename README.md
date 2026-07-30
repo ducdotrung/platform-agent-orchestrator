@@ -77,6 +77,10 @@ python -m platform_agent_orchestrator demo sre
 python -m platform_agent_orchestrator demo engineering
 ```
 
+The service factory is `platform_agent_orchestrator.api:create_app`. It exposes
+`/livez` for process liveness and `/readyz` for admission dependency readiness;
+these signals are intentionally independent.
+
 ## Workflows
 
 ### Alert analysis
