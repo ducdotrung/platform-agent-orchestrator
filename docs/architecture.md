@@ -37,6 +37,11 @@ implements the admission outbox as a PostgreSQL durable job queue consumed
 directly by workers. There is no separate broker or dispatcher. Delivery is at
 least once; checkpoints and durable side-effect receipts remain separate.
 
+[ADR-0003](adr/0003-persistence-checkpoints-and-retention.md) places
+application records and LangGraph checkpoints in separate databases on the same
+sample PostgreSQL server. Application code never queries saver-managed tables,
+and telemetry remains outside both authoritative stores.
+
 ```text
 webhook receivers / schedules
           |

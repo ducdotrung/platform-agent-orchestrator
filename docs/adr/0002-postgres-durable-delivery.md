@@ -369,5 +369,6 @@ receipt store.
 - [PostgreSQL `SELECT` locking and `SKIP LOCKED`](https://www.postgresql.org/docs/current/sql-select.html#SQL-FOR-UPDATE-SHARE)
 - [PostgreSQL `UPDATE ... RETURNING`](https://www.postgresql.org/docs/current/sql-update.html)
 - [ADR-0001: Async runtime and lifecycle](0001-async-runtime-and-lifecycle.md)
+- [ADR-0003: Persistence, checkpoints, and retention](0003-persistence-checkpoints-and-retention.md)
 - [Repository architecture](../architecture.md)
 - [Production productization review](../production-productization-review.md)
