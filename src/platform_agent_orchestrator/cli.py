@@ -6,15 +6,13 @@ import argparse
 import json
 from typing import Any
 
-from platform_agent_orchestrator.adapters import DemoPlatformServices
+from platform_agent_orchestrator.bootstrap import build_dependencies
 from platform_agent_orchestrator.contracts import (
     AlertReceivedPayloadV1,
     DomainEvent,
     EventEnvelopeV1,
     EventType,
 )
-from platform_agent_orchestrator.observability import observability_from_env
-from platform_agent_orchestrator.registry import WorkflowRegistry
 
 
 def sample_events() -> dict[str, DomainEvent]:
@@ -79,9 +77,8 @@ def compact_result(result: dict[str, Any]) -> dict[str, Any]:
 
 
 def run_demo(selection: str) -> int:
-    demo = DemoPlatformServices()
-    observability = observability_from_env()
-    registry = WorkflowRegistry(demo.as_services(), observability=observability)
+    dependencies = build_dependencies()
+    registry = dependencies.registry()
     try:
         events = sample_events()
         names = list(events) if selection == "all" else [selection]
@@ -92,7 +89,7 @@ def run_demo(selection: str) -> int:
         return 0
     finally:
         # Short-lived processes must flush buffered telemetry before exiting.
-        observability.shutdown()
+        dependencies.shutdown()
 
 
 def build_parser() -> argparse.ArgumentParser:

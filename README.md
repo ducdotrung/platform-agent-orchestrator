@@ -19,6 +19,11 @@ The sample uses:
   MCP integrations can remain independently deployed;
 - deterministic demo adapters, so the examples and tests do not need API keys.
 
+Runtime configuration defaults to the credential-free `demo` profile on
+loopback. See `.env.example` for validated settings. The opt-in `local` service
+profile refuses to start without its required PostgreSQL configuration, and
+external egress remains disabled in this public sample.
+
 ## Architecture
 
 ```text
