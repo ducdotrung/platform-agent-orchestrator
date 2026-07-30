@@ -39,6 +39,9 @@ def test_image_compose_and_ci_keep_runtime_boundary_hardened() -> None:
     assert compose["networks"]["backend"]["internal"] is True
     assert "service_completed_successfully" in (ROOT / "compose.yaml").read_text()
     assert "docker compose up --detach --wait api worker" in workflow
+    assert "TEST_POSTGRES_URL" in workflow
+    assert "python -m deploy.app_migrate" in workflow
+    assert "checkpoint_migrate_main" in workflow
     assert all(
         "==" in line
         for line in lock_lines
