@@ -16,9 +16,13 @@ DDL. The initial revision defines bounded payloads and summaries, scoped
 idempotency, fenced delivery leases, immutable replay identities, approval
 expiry, side-effect receipts, and append-only audit records.
 
-The repository test suite executes upgrade/downgrade and portable constraints
-with SQLite and compiles schema-qualified PostgreSQL DDL offline. This does not
-claim PostgreSQL integration coverage. Gate G2 additionally requires the B16
+The default repository test suite executes upgrade/downgrade and portable
+constraints with SQLite and compiles schema-qualified PostgreSQL DDL offline.
+Setting `TEST_POSTGRES_URL` and `TEST_CHECKPOINT_POSTGRES_URL` enables real
+PostgreSQL integration coverage for parent/child admission ordering,
+checkpointed workflow execution, durable notification, approval/resume, and
+terminal run persistence. This passed against a temporary PostgreSQL 16.14
+process on 2026-07-30. Gate G2 additionally requires the B16 image build and
 Compose migration smoke test against the pinned PostgreSQL image.
 
 `EventRepository` commits event, initial run, pending delivery job, and audit

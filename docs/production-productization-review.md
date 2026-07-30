@@ -1,9 +1,12 @@
 # Production Productization Plan Review and Execution Backlog
 
 Status: reviewed on 2026-07-30. A01-A08 and B01-B16 are implemented for the
-synthetic hackathon sample. Gate G1 passed; Gate G2 awaits the Compose smoke in
-an environment with Docker because this development host has no container
-runtime. Gate G0/G1 must be repeated before company use.
+synthetic hackathon sample. Gate G1 passed. Real PostgreSQL 16 migrations,
+admission, checkpointing, durable notification, approval/resume, authenticated
+process smoke, and worker SIGTERM restart passed on 2026-07-30. Gate G2 still
+awaits the image build and Compose smoke in an environment with Docker because
+this development host has no container runtime. Gate G0/G1 must be repeated
+before company use.
 
 This document reviews
 [the productization plan](production-productization-plan.md) against the current

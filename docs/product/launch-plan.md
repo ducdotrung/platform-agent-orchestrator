@@ -49,7 +49,7 @@ production launch is authorized.
 | --- | --- | --- | --- | --- |
 | G0 — Scope | Product templates exist | Sample scope, roles, baseline assumptions, success, and rollback approved | Repository Owner | Passed for public sample on 2026-07-30 |
 | G1 — Design | G0 passed | ADRs and read-only threat model approved | Repository Owner | Passed for public sample on 2026-07-30 |
-| G2 — Local slice | G1 passed | Durable demo slice and recovery tests pass | Demo Operator | Not started |
+| G2 — Local slice | G1 passed | Durable demo slice and recovery tests pass | Demo Operator | Runtime/PostgreSQL evidence passed; image/Compose smoke pending |
 | G3 — Offline candidate | G2 passed | Public adapter contracts and replay thresholds pass | Hackathon Product Lead | Blocked by G2 |
 | G4 — Shadow | G3 passed | Local shadow reliability, quality, latency, cost, and safety reviewed | Repository Owner | Blocked by G3 |
 | G5 — Reviewed pilot | G4 passed | Judge/user demo with mandatory review meets sample criteria | Repository Owner | Blocked by G4 |
@@ -75,7 +75,7 @@ Define measurable triggers before shadow or pilot traffic begins.
   criteria are approved for the hackathon.
 - [x] Data classification, retention, and deletion ownership are approved for
   the public sample.
-- [ ] Authentication, authorization, replay protection, and audit are tested.
+- [x] Authentication, authorization, replay protection, and audit are tested.
 - [ ] Replay evaluation and release gates meet approved thresholds.
 - [ ] Dashboards, alerts, support paths, and runbooks are exercised.
 - [ ] Restore, worker-recovery, duplicate-delivery, and rollback exercises pass.
