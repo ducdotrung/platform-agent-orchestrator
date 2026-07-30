@@ -51,6 +51,7 @@ def test_alert_enriches_and_notifies_actionable_incident() -> None:
     result = registry.invoke("alert", alert)
 
     assert result["status"] == "notified"
+    assert result["run_id"] == alert.correlation_id
     assert result["alert"]["priority"] == "P0"
     assert result["decision"]["evidence_ids"]
     assert len(demo.notifier.messages) == 1
@@ -71,6 +72,7 @@ def test_refresh_extracts_three_surfaces_and_publishes_one_snapshot() -> None:
     result = registry.invoke("refresh", refresh)
 
     assert result["status"] == "published"
+    assert result["run_id"] == refresh.correlation_id
     assert {item["artifact_type"] for item in result["artifacts"]} == {
         "code",
         "config",
@@ -113,6 +115,7 @@ def test_safe_sre_action_executes_without_interrupt() -> None:
     result = registry.invoke("sre", ticket)
 
     assert result["risk"] == "safe"
+    assert result["run_id"] == ticket.correlation_id
     assert result["status"] == "completed"
     assert result["verified"] is True
 

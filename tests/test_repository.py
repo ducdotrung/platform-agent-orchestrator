@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
@@ -223,6 +224,29 @@ def test_success_transition_is_atomic_and_fenced(tmp_path: Path) -> None:
 
             with pytest.raises(LeaseLost):
                 await repository.record_success(claim, "duplicate")
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.skipif(
+    "TEST_POSTGRES_URL" not in os.environ,
+    reason="set TEST_POSTGRES_URL to run the real PostgreSQL repository regression",
+)
+def test_postgres_admission_flushes_foreign_key_parents_first() -> None:
+    async def scenario() -> None:
+        database_url = os.environ["TEST_POSTGRES_URL"]
+        engine = create_async_engine(database_url)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        repository = EventRepository(sessions)
+        event = envelope(key=f"sample:postgres-admission:{uuid4()}")
+        try:
+            admission = await repository.admit_event(event, authorization())
+            run = await repository.get_run(admission.run_id, authorization().scope_id)
+
+            assert admission.status == RunStatus.QUEUED
+            assert run is not None and run.status == RunStatus.QUEUED
         finally:
             await engine.dispose()
 

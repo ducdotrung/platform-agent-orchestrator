@@ -15,6 +15,7 @@ from .common import load_event
 
 class RefreshState(TypedDict, total=False):
     event: dict[str, Any]
+    run_id: str
     changed_files: list[str]
     surfaces: list[str]
     artifacts: Annotated[list[dict[str, Any]], operator.add]

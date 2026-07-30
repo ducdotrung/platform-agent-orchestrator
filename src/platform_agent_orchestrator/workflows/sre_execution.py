@@ -15,6 +15,7 @@ from .common import dump_evidence, load_event, load_evidence
 
 class SREState(TypedDict, total=False):
     event: dict[str, Any]
+    run_id: str
     ticket: dict[str, Any]
     evidence: list[dict[str, Any]]
     plan: list[dict[str, Any]]

@@ -155,32 +155,37 @@ class EventRepository:
 
             run_id = str(uuid4())
             job_id = str(uuid4())
-            session.add(
-                EventRecord(
-                    id=envelope.id,
-                    scope_id=authorization.scope_id,
-                    source=envelope.source,
-                    event_type=envelope.type,
-                    schema_version=envelope.schema_version,
-                    subject=envelope.subject,
-                    occurred_at=envelope.occurred_at,
-                    correlation_id=envelope.correlation_id,
-                    idempotency_key=envelope.idempotency_key,
-                    fingerprint=fingerprint,
-                    payload=envelope.payload.model_dump(mode="json"),
-                )
+            event = EventRecord(
+                id=envelope.id,
+                scope_id=authorization.scope_id,
+                source=envelope.source,
+                event_type=envelope.type,
+                schema_version=envelope.schema_version,
+                subject=envelope.subject,
+                occurred_at=envelope.occurred_at,
+                correlation_id=envelope.correlation_id,
+                idempotency_key=envelope.idempotency_key,
+                fingerprint=fingerprint,
+                payload=envelope.payload.model_dump(mode="json"),
             )
-            session.add(
-                RunRecord(
-                    id=run_id,
-                    scope_id=authorization.scope_id,
-                    event_id=envelope.id,
-                    workflow="alert",
-                    workflow_contract_version="1",
-                    thread_id=run_id,
-                    status=RunStatus.QUEUED.value,
-                )
+            session.add(event)
+            # The classical mappings intentionally expose no relationship objects.
+            # Flush each new FK parent before its dependants so ordering does not rely
+            # on SQLite's default foreign-key behavior or ORM relationship metadata.
+            await session.flush()
+
+            run = RunRecord(
+                id=run_id,
+                scope_id=authorization.scope_id,
+                event_id=envelope.id,
+                workflow="alert",
+                workflow_contract_version="1",
+                thread_id=run_id,
+                status=RunStatus.QUEUED.value,
             )
+            session.add(run)
+            await session.flush()
+
             now = await self._now(session)
             session.add(
                 DeliveryJobRecord(
@@ -446,6 +451,8 @@ class EventRepository:
                     expires_at=now + timedelta(days=30),
                 )
             )
+            await session.flush()
+
             approval = ApprovalRecord(
                 id=approval_id,
                 scope_id=authorization.scope_id,
@@ -462,6 +469,8 @@ class EventRepository:
                 idempotency_claim_id=claim_id,
             )
             session.add(approval)
+            await session.flush()
+
             prior_state = run.status
             if request.decision == ApprovalDecision.APPROVED:
                 session.add(

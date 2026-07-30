@@ -15,6 +15,7 @@ from .common import dump_evidence, load_event, load_evidence
 
 class AlertState(TypedDict, total=False):
     event: dict[str, Any]
+    run_id: str
     alert: dict[str, Any]
     suppressed: bool
     suppression_reason: str
