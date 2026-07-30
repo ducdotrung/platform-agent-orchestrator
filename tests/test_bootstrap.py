@@ -20,6 +20,7 @@ def test_settings_use_credential_free_local_only_defaults() -> None:
     assert settings.bind_host == "127.0.0.1"
     assert settings.database_url is None
     assert settings.checkpoint_database_url is None
+    assert settings.webhook_signing_secret is None
     assert settings.external_egress_enabled is False
     assert settings.max_request_bytes == 65_536
 
@@ -33,6 +34,14 @@ def test_settings_use_credential_free_local_only_defaults() -> None:
         ({"PLATFORM_EXTERNAL_EGRESS_ENABLED": "sometimes"}, "invalid boolean"),
         ({"PLATFORM_EXTERNAL_EGRESS_ENABLED": "true"}, "external egress"),
         ({"PLATFORM_ADAPTER_MODE": "company"}, "String should match pattern"),
+        ({"PLATFORM_WEBHOOK_SIGNING_SECRET": "too-short"}, "at least 32"),
+        (
+            {
+                "PLATFORM_WEBHOOK_MAX_SKEW_SECONDS": "300",
+                "PLATFORM_WEBHOOK_NONCE_TTL_SECONDS": "500",
+            },
+            "nonce TTL",
+        ),
     ],
 )
 def test_settings_reject_invalid_or_unsafe_configuration(

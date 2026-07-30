@@ -38,14 +38,16 @@ def test_liveness_is_distinct_from_unready_admission() -> None:
     }
 
 
-def test_demo_profile_is_ready_without_credentials() -> None:
+def test_demo_profile_is_unready_without_admission_authentication() -> None:
     with TestClient(create_app(settings=ApplicationSettings())) as client:
         response = client.get("/readyz")
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     assert response.json()["checks"] == {
         "configuration": "ready",
+        "authentication": "unconfigured",
         "demo_adapters": "ready",
+        "replay_store": "process_local_demo",
     }
 
 

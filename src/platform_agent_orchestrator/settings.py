@@ -70,6 +70,9 @@ class ApplicationSettings(BaseModel):
     max_request_bytes: int = Field(default=65_536, ge=1_024, le=1_048_576)
     database_url: SecretStr | None = Field(default=None, repr=False)
     checkpoint_database_url: SecretStr | None = Field(default=None, repr=False)
+    webhook_signing_secret: SecretStr | None = Field(default=None, repr=False)
+    webhook_max_skew_seconds: int = Field(default=300, ge=30, le=900)
+    webhook_nonce_ttl_seconds: int = Field(default=1_200, ge=120, le=3_600)
     external_egress_enabled: bool = False
 
     @classmethod
@@ -103,6 +106,15 @@ class ApplicationSettings(BaseModel):
             "checkpoint_database_url": _optional_secret(
                 values.get("CHECKPOINT_DATABASE_URL")
             ),
+            "webhook_signing_secret": _optional_secret(
+                values.get("PLATFORM_WEBHOOK_SIGNING_SECRET")
+            ),
+            "webhook_max_skew_seconds": values.get(
+                "PLATFORM_WEBHOOK_MAX_SKEW_SECONDS", "300"
+            ),
+            "webhook_nonce_ttl_seconds": values.get(
+                "PLATFORM_WEBHOOK_NONCE_TTL_SECONDS", "1200"
+            ),
             "external_egress_enabled": _boolean(
                 values.get("PLATFORM_EXTERNAL_EGRESS_ENABLED"), default=False
             ),
@@ -113,6 +125,13 @@ class ApplicationSettings(BaseModel):
     def validate_profile(self) -> Self:
         if self.external_egress_enabled:
             raise ValueError("external egress is not enabled in the public sample")
+        if self.webhook_nonce_ttl_seconds < self.webhook_max_skew_seconds * 2:
+            raise ValueError("webhook nonce TTL must cover both sides of the clock-skew window")
+        if (
+            self.webhook_signing_secret is not None
+            and len(self.webhook_signing_secret.get_secret_value()) < 32
+        ):
+            raise ValueError("webhook signing secret must contain at least 32 characters")
         if self.profile == DeploymentProfile.LOCAL:
             if self.role in {RuntimeRole.API, RuntimeRole.WORKER, RuntimeRole.MIGRATION}:
                 if self.database_url is None:
@@ -140,4 +159,5 @@ class ApplicationSettings(BaseModel):
             "external_egress_enabled": self.external_egress_enabled,
             "database_configured": self.database_url is not None,
             "checkpoint_database_configured": self.checkpoint_database_url is not None,
+            "webhook_authentication_configured": self.webhook_signing_secret is not None,
         }

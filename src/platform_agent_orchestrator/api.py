@@ -16,6 +16,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from platform_agent_orchestrator.bootstrap import RuntimeDependencies, build_dependencies
+from platform_agent_orchestrator.security import AdmissionSecurity, AdmissionSecurityError
 from platform_agent_orchestrator.settings import (
     ApplicationSettings,
     DeploymentProfile,
@@ -37,14 +38,27 @@ class ConfigurationReadinessProbe:
     settings: ApplicationSettings
 
     async def check(self) -> ReadinessReport:
+        authentication = (
+            "ready" if self.settings.webhook_signing_secret is not None else "unconfigured"
+        )
         if self.settings.profile == DeploymentProfile.DEMO:
             return ReadinessReport(
-                ready=True,
-                checks={"configuration": "ready", "demo_adapters": "ready"},
+                ready=authentication == "ready",
+                checks={
+                    "configuration": "ready",
+                    "authentication": authentication,
+                    "demo_adapters": "ready",
+                    "replay_store": "process_local_demo",
+                },
             )
         return ReadinessReport(
             ready=False,
-            checks={"configuration": "ready", "persistence": "not_initialized"},
+            checks={
+                "configuration": "ready",
+                "authentication": authentication,
+                "persistence": "not_initialized",
+                "replay_store": "not_initialized",
+            },
         )
 
 
@@ -126,6 +140,7 @@ def create_app(
     settings: ApplicationSettings | None = None,
     dependencies: RuntimeDependencies | None = None,
     readiness: ReadinessProbe | None = None,
+    admission_security: AdmissionSecurity | None = None,
 ) -> FastAPI:
     if settings is not None and dependencies is not None:
         raise ValueError("pass settings or dependencies, not both")
@@ -158,6 +173,15 @@ def create_app(
         lifespan=lifespan,
     )
     app.add_middleware(RequestSizeLimitMiddleware, max_bytes=application_settings.max_request_bytes)
+    app.state.admission_security = admission_security or AdmissionSecurity.from_settings(
+        application_settings
+    )
+
+    @app.exception_handler(AdmissionSecurityError)
+    async def admission_security_error(
+        _request: Request, error: AdmissionSecurityError
+    ) -> JSONResponse:
+        return _public_error(error.status_code, error.code, error.public_message)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(

@@ -81,6 +81,11 @@ The service factory is `platform_agent_orchestrator.api:create_app`. It exposes
 `/livez` for process liveness and `/readyz` for admission dependency readiness;
 these signals are intentionally independent.
 
+Event admission uses a signed-webhook security boundary with exact public-sample
+source, alert-workflow, Sock Shop service, and team-scope allow-lists. The demo
+profile has a process-local replay fence for tests only; local service mode
+fails readiness until the durable replay store is connected.
+
 ## Workflows
 
 ### Alert analysis
