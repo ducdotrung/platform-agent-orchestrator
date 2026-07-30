@@ -27,6 +27,11 @@ checkpoint answers “where is this execution?” A knowledge snapshot answers
 
 ## Production topology
 
+The service runtime and I/O lifecycle follow
+[ADR-0001](adr/0001-async-runtime-and-lifecycle.md): API, dispatcher, worker,
+graph invocation, and I/O-bearing ports are async; deterministic CPU-light
+nodes remain synchronous.
+
 ```text
 webhook receivers / schedules
           |

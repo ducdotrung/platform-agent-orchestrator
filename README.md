@@ -126,3 +126,5 @@ masking, sampling, and evaluation guidance. The
 [production productization plan](docs/production-productization-plan.md) and
 [reviewed execution backlog](docs/production-productization-review.md) describe
 the gated path from the reference implementation to a read-only alert pilot.
+[ADR-0001](docs/adr/0001-async-runtime-and-lifecycle.md) defines the accepted
+async runtime and process lifecycle boundary.
