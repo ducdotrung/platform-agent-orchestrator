@@ -1,6 +1,7 @@
 # Production Productization Plan Review and Execution Backlog
 
-Status: reviewed on 2026-07-30; implementation is awaiting approval.
+Status: reviewed on 2026-07-30. A01 is complete; A02 awaits stakeholder input
+and approval.
 
 This document reviews
 [the productization plan](production-productization-plan.md) against the current

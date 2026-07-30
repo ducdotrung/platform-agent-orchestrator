@@ -1,7 +1,7 @@
 # Production Productization Plan
 
-> Review status: direction accepted with sequencing changes; implementation is
-> awaiting approval. See the
+> Review status: direction accepted with sequencing changes; delivery follows
+> the approved gated backlog. See the
 > [review and commit-sized execution backlog](production-productization-review.md).
 
 ## Purpose
