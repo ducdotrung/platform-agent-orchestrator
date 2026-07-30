@@ -26,3 +26,7 @@ record in one transaction. Its claim path uses ordered `FOR UPDATE SKIP LOCKED`
 on PostgreSQL, closes an expired active attempt as `worker_lost`, and creates a
 new lease token and attempt. The SQLite test shim serializes claims only because
 SQLite does not implement this PostgreSQL lock behavior.
+
+`DatabaseJobDispatcher` is the selected B09 dispatcher. It does not publish a
+second copy of a job: it retries bounded transient claim failures against the
+authoritative table, validates claimed records, and wakes retries on shutdown.
