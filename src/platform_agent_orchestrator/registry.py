@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from platform_agent_orchestrator.adapters.ports import PlatformServices
+from platform_agent_orchestrator.checkpointing import checkpoint_config
 from platform_agent_orchestrator.contracts import DomainEvent, EventType
 from platform_agent_orchestrator.observability import NoOpObservability, ObservabilityBackend
 from platform_agent_orchestrator.observability.base import ScoreDataType, ScoreValue, WorkflowTrace
@@ -59,7 +60,7 @@ class WorkflowRegistry:
         state = {"event": event.model_dump(mode="json"), **(extra_state or {})}
         with self.observability.trace_workflow(workflow, event) as trace:
             config = {
-                "configurable": {"thread_id": thread_id or event.correlation_id},
+                **checkpoint_config(thread_id or event.correlation_id),
                 "callbacks": trace.callbacks,
                 "tags": trace.tags,
                 "metadata": trace.metadata,
