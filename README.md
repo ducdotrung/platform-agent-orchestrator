@@ -117,4 +117,7 @@ node may be executed again after recovery.
 See [docs/architecture.md](docs/architecture.md) for contracts, ownership, and
 the suggested migration sequence. See
 [docs/observability.md](docs/observability.md) for Langfuse configuration,
-masking, sampling, and evaluation guidance.
+masking, sampling, and evaluation guidance. The
+[production productization plan](docs/production-productization-plan.md) and
+[reviewed execution backlog](docs/production-productization-review.md) describe
+the gated path from the reference implementation to a read-only alert pilot.
