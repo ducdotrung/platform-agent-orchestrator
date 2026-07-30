@@ -250,7 +250,7 @@ An interrupt does not retain a worker lease:
    `Command(resume=...)`; callers cannot submit arbitrary graph state or tools.
 
 Repeated, stale, altered, expired, or unauthorized approvals create no resume
-job. ADR-0004 will define the identity and authorization policy in detail.
+job. ADR-0004 defines the identity and authorization policy in detail.
 
 ## Failure recovery
 
@@ -370,5 +370,6 @@ receipt store.
 - [PostgreSQL `UPDATE ... RETURNING`](https://www.postgresql.org/docs/current/sql-update.html)
 - [ADR-0001: Async runtime and lifecycle](0001-async-runtime-and-lifecycle.md)
 - [ADR-0003: Persistence, checkpoints, and retention](0003-persistence-checkpoints-and-retention.md)
+- [ADR-0004: Authentication, authorization, and replay](0004-authentication-authorization-and-replay.md)
 - [Repository architecture](../architecture.md)
 - [Production productization review](../production-productization-review.md)

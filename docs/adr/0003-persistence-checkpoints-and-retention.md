@@ -59,6 +59,7 @@ must not query or migrate saver tables directly.
 | Question | Authoritative store |
 | --- | --- |
 | Was an event accepted and deduplicated? | `events` plus `idempotency_claims` |
+| Was a signed webhook nonce already used? | `auth_replay_claims` |
 | What user-visible state is the run in? | `runs` |
 | Is work pending, leased, retrying, or dead-lettered? | `delivery_jobs` and `delivery_attempts` |
 | Where can graph execution resume? | LangGraph checkpoint database |
@@ -198,6 +199,31 @@ The claim, domain mutation, and final replayable response summary commit in one
 application transaction where possible. If an API transaction rolls back, its
 claim rolls back too.
 
+### `auth_replay_claims`
+
+Short-lived durable replay fence for the signed-webhook profile in ADR-0004.
+It is distinct from business idempotency: a retried business request uses a new
+signature nonce and the same idempotency key.
+
+Required fields:
+
+- `id`, bounded `authenticator_id`, and 32-byte SHA-256 nonce hash;
+- 32-byte signed-request fingerprint;
+- signature `created_at`, `expires_at`, and `retention_until`.
+
+Constraints:
+
+- unique `(authenticator_id, nonce_hash)`;
+- rows are immutable until retention deletion;
+- the raw nonce, signature, authorization header, key, and request body are not
+  stored;
+- the claim commits in the same transaction as the authorized mutation and
+  rolls back with it.
+
+Expired claims remain until ten minutes after signature expiry, so replicas and
+restarts enforce the same replay window. ADR-0004 defines signature validation,
+nonce size, safe retry, and error behavior.
+
 ### `approvals`
 
 Authoritative human decision for a durable interrupt.
@@ -289,7 +315,7 @@ Rules:
 
 | Operation | One application transaction contains | Deliberately outside |
 | --- | --- | --- |
-| Event admission | Idempotency claim, event, run, invoke job, admission audit | Workflow/checkpoint work |
+| Event admission | Optional signed-request replay claim, idempotency claim, event, run, invoke job, admission audit | Workflow/checkpoint work |
 | Job claim | Fenced job lease, delivery attempt, run transition, claim audit | Graph execution |
 | Heartbeat | Fenced job/attempt timestamps only | Graph/external call |
 | Retry/terminal outcome | Fenced job, attempt, run state, bounded audit | Checkpointer internals |
@@ -383,6 +409,7 @@ waiting-approval runs are never automatically purged.
 | Checkpoint thread | 30 days after terminal run | Delete with `adelete_thread`, then mark application run | Retention Maintainer |
 | Runs, events metadata, jobs, attempts | 180 days after terminal run | Delete children then parents in bounded batches | Retention Maintainer |
 | API idempotency claims | 180 days and never before protected resource expiry | Delete after resource retention | Retention Maintainer |
+| Signed-request replay claims | 10 minutes after signature expiry | Delete expired immutable claims in bounded batches | Retention Maintainer |
 | Approvals | 180 days after terminal run | Delete with run-related business records | Retention Maintainer |
 | Side-effect claims/receipts | 180 days after terminal run | Delete only after retry/reconciliation window closes | Retention Maintainer |
 | Audit events | 180 days | Delete independently in bounded batches | Retention Maintainer |
@@ -480,6 +507,8 @@ summaries. Protected evaluation data belongs in its approved dataset location.
 - Runtime roles cannot run DDL or access the other database.
 - Database constraints reject conflicting event, approval, job, and side-effect
   idempotency keys.
+- Repeated signed-request nonces are rejected across replicas and restart while
+  a newly signed retry with the same business idempotency key remains safe.
 - Side-effect crash points reconcile without duplicate logical notification.
 - No graph checkpoint or audit row contains forbidden content.
 - Strict msgpack deserialization rejects unapproved custom types.
@@ -497,4 +526,5 @@ summaries. Protected evaluation data belongs in its approved dataset location.
 - [Alembic migration documentation](https://alembic.sqlalchemy.org/en/latest/)
 - [ADR-0001: Async runtime and lifecycle](0001-async-runtime-and-lifecycle.md)
 - [ADR-0002: PostgreSQL durable delivery](0002-postgres-durable-delivery.md)
+- [ADR-0004: Authentication, authorization, and replay](0004-authentication-authorization-and-replay.md)
 - [Repository architecture](../architecture.md)

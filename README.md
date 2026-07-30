@@ -132,3 +132,6 @@ async runtime and process lifecycle boundary.
 PostgreSQL delivery and recovery semantics.
 [ADR-0003](docs/adr/0003-persistence-checkpoints-and-retention.md) defines
 application/checkpoint isolation, idempotency, audit, and retention.
+[ADR-0004](docs/adr/0004-authentication-authorization-and-replay.md) defines
+API and webhook identity, deterministic authorization, approval binding, and
+replay protection.

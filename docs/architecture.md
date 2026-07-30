@@ -42,6 +42,11 @@ application records and LangGraph checkpoints in separate databases on the same
 sample PostgreSQL server. Application code never queries saver-managed tables,
 and telemetry remains outside both authoritative stores.
 
+[ADR-0004](adr/0004-authentication-authorization-and-replay.md) makes the API
+an OAuth resource server with an explicit signed-webhook alternative. It fixes
+the public sample to one resource scope and keeps tokens, signatures, and
+authorization policy out of graph state.
+
 ```text
 webhook receivers / schedules
           |

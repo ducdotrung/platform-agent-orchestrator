@@ -1,6 +1,6 @@
 # Production Productization Plan Review and Execution Backlog
 
-Status: reviewed on 2026-07-30. A01-A05 are complete; A06 awaits approval. Gate
+Status: reviewed on 2026-07-30. A01-A06 are complete; A07 awaits approval. Gate
 G0 applies only to the synthetic hackathon sample and must be repeated before
 company use.
 
@@ -98,7 +98,7 @@ No mutation tool is part of G0-G6.
 | [A03](adr/0001-async-runtime-and-lifecycle.md) | Add ADR for the runtime I/O model and lifecycle boundary. | ADR includes alternatives, consequences, and migration effect on current ports. | A02 |
 | [A04](adr/0002-postgres-durable-delivery.md) | Add ADR for outbox/queue topology and failure semantics. | State machine, leases, retries, dead letters, and recovery behavior are specified. | A02 |
 | [A05](adr/0003-persistence-checkpoints-and-retention.md) | Add ADR for Postgres schemas, checkpointing, idempotency, side effects, audit, and retention ownership. | Store boundaries and transaction boundaries are unambiguous. | A04 |
-| A06 | Add ADR for authentication, approval identity, authorization, launch-team scope, and replay protection. | Positive/negative authorization cases are listed. | A02, deployment input |
+| [A06](adr/0004-authentication-authorization-and-replay.md) | Add ADR for authentication, approval identity, authorization, launch-team scope, and replay protection. | Positive/negative authorization cases are listed. | A02, deployment input |
 | A07 | Add ADRs for deployment and external adapter contracts. | Owners of every external API and cross-repository change approve the contract. | A03-A06 |
 | A08 | Add a read-only-pilot threat model and data-flow/classification document. | Security review covers prompt injection, exfiltration, spoofing, replay, and retention. | A05-A07 |
 
