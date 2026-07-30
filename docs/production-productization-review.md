@@ -1,8 +1,8 @@
 # Production Productization Plan Review and Execution Backlog
 
-Status: reviewed on 2026-07-30. A01-A08 and B01 are complete and Gate G1 passed
-for the synthetic hackathon sample; B02 is next. Gate G0/G1 must be repeated
-before company use.
+Status: reviewed on 2026-07-30. A01-A08 and B01-B02 are complete and Gate G1
+passed for the synthetic hackathon sample; B03 is next. Gate G0/G1 must be
+repeated before company use.
 
 This document reviews
 [the productization plan](production-productization-plan.md) against the current
