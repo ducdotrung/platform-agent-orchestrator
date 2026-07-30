@@ -22,6 +22,8 @@ from platform_agent_orchestrator.service_contracts import (
     ApprovalDecision,
     ApprovalDecisionRequestV1,
     DeliveryStatus,
+    FeedbackContractV1,
+    FeedbackRequestV1,
     PendingApprovalContractV1,
     RunContractV1,
     RunStatus,
@@ -33,6 +35,7 @@ from .models import (
     DeliveryAttemptRecord,
     DeliveryJobRecord,
     EventRecord,
+    FeedbackRecord,
     IdempotencyClaimRecord,
     RunRecord,
 )
@@ -59,6 +62,10 @@ class ApprovalExpired(ValueError):
 
 
 class ApprovalStale(ValueError):
+    pass
+
+
+class FeedbackRunNotFound(LookupError):
     pass
 
 
@@ -514,6 +521,63 @@ class EventRepository:
             )
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
             raise RuntimeError("waiting run has invalid approval metadata") from error
+
+    async def ingest_feedback(
+        self,
+        run_id: str,
+        request: FeedbackRequestV1,
+        authorization: Any,
+    ) -> FeedbackContractV1:
+        async with self._sessions() as session, session.begin():
+            run = await session.scalar(
+                sa.select(RunRecord).where(
+                    RunRecord.id == run_id,
+                    RunRecord.scope_id == authorization.scope_id,
+                )
+            )
+            if run is None:
+                raise FeedbackRunNotFound("feedback run was not found")
+            now = await self._now(session)
+            feedback_id = str(uuid4())
+            session.add(
+                FeedbackRecord(
+                    id=feedback_id,
+                    scope_id=authorization.scope_id,
+                    run_id=run.id,
+                    actor_id=authorization.actor_id,
+                    actor_type=authorization.actor_type,
+                    rating=request.rating.value,
+                    reason=request.reason,
+                    trace_id=request.trace_id,
+                    created_at=now,
+                    retention_until=now + timedelta(days=90),
+                    metadata_json=request.metadata,
+                )
+            )
+            session.add(
+                AuditEventRecord(
+                    scope_id=run.scope_id,
+                    actor_type=authorization.actor_type,
+                    actor_id=authorization.actor_id,
+                    action="feedback.create",
+                    outcome="recorded",
+                    reason_code=request.rating.value,
+                    run_id=run.id,
+                    new_state=run.status,
+                    metadata_json={"feedback_id": feedback_id},
+                )
+            )
+            await session.flush()
+            return FeedbackContractV1(
+                feedback_id=feedback_id,
+                run_id=run.id,
+                actor_id=authorization.actor_id,
+                rating=request.rating,
+                reason=request.reason,
+                trace_id=request.trace_id,
+                created_at=now,
+                metadata=request.metadata,
+            )
 
     async def record_success(self, claim: ClaimedJob, summary: str) -> None:
         await self._record_outcome(

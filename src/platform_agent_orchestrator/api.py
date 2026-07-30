@@ -23,6 +23,7 @@ from platform_agent_orchestrator.persistence import (
     ApprovalNotFound,
     ApprovalStale,
     EventRepository,
+    FeedbackRunNotFound,
     IdempotencyConflict,
 )
 from platform_agent_orchestrator.security import (
@@ -35,7 +36,10 @@ from platform_agent_orchestrator.security import (
     require_reviewer_authorization,
     require_run_read_authorization,
 )
-from platform_agent_orchestrator.service_contracts import ApprovalDecisionRequestV1
+from platform_agent_orchestrator.service_contracts import (
+    ApprovalDecisionRequestV1,
+    FeedbackRequestV1,
+)
 from platform_agent_orchestrator.settings import (
     ApplicationSettings,
     DeploymentProfile,
@@ -318,6 +322,36 @@ def create_app(
         except ApprovalConflict:
             return _public_error(409, "approval_conflict", "Approval decision conflicts")
         return JSONResponse(status_code=202, content=approval.public_dump())
+
+    @app.post("/v1/runs/{run_id}/feedback")
+    async def create_feedback(
+        run_id: str,
+        feedback_request: FeedbackRequestV1,
+        authorization: Annotated[
+            ReviewerAuthorizationContext,
+            Depends(require_reviewer_authorization),
+        ],
+    ) -> JSONResponse:
+        repository: EventRepository | None = app.state.event_repository
+        if repository is None:
+            return _public_error(503, "persistence_unavailable", "Persistence is unavailable")
+        try:
+            feedback = await repository.ingest_feedback(
+                run_id, feedback_request, authorization
+            )
+        except FeedbackRunNotFound:
+            return _public_error(404, "feedback_run_not_found", "Run was not found")
+        if feedback.trace_id:
+            try:
+                app.state.dependencies.observability.score(
+                    feedback.trace_id,
+                    "feedback.rating",
+                    feedback.rating.value,
+                    data_type="CATEGORICAL",
+                )
+            except Exception:
+                pass
+        return JSONResponse(status_code=201, content=feedback.public_dump())
 
     @app.get("/livez")
     async def live() -> dict[str, str]:

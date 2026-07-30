@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from enum import StrEnum
 from typing import Any, ClassVar, Literal, Self
@@ -49,6 +50,19 @@ def _redact_public(value: Any) -> Any:
     if isinstance(value, list):
         return [_redact_public(item) for item in value]
     return value
+
+
+def _contains_sensitive_key(value: Any) -> bool:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            normalized = str(key).lower().replace("-", "_")
+            if normalized in _SENSITIVE_KEYS or normalized.endswith(_SENSITIVE_SUFFIXES):
+                return True
+            if _contains_sensitive_key(item):
+                return True
+    elif isinstance(value, list):
+        return any(_contains_sensitive_key(item) for item in value)
+    return False
 
 
 class PublicContract(BaseModel):
@@ -288,3 +302,20 @@ class FeedbackContractV1(PublicContract):
     trace_id: str | None = Field(default=None, max_length=128)
     created_at: datetime = Field(default_factory=utc_now)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class FeedbackRequestV1(PublicContract):
+    schema_version: Literal["1"] = "1"
+    rating: FeedbackRating
+    reason: str = Field(min_length=1, max_length=2_048)
+    trace_id: str | None = Field(default=None, max_length=128)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def bound_metadata(self) -> Self:
+        encoded = json.dumps(self.metadata, ensure_ascii=False, separators=(",", ":"))
+        if len(encoded.encode()) > 8_192:
+            raise ValueError("feedback metadata exceeds 8 KiB")
+        if _contains_sensitive_key(self.metadata):
+            raise ValueError("feedback metadata contains a sensitive key")
+        return self

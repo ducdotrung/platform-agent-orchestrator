@@ -20,6 +20,7 @@ EXPECTED_TABLES = {
     "delivery_attempts",
     "delivery_jobs",
     "events",
+    "feedback",
     "idempotency_claims",
     "runs",
     "side_effects",
@@ -89,6 +90,7 @@ def test_postgresql_offline_upgrade_is_schema_qualified() -> None:
     assert "CREATE SCHEMA IF NOT EXISTS orchestrator" in ddl
     assert "CREATE TABLE orchestrator.events" in ddl
     assert "CREATE TABLE orchestrator.side_effects" in ddl
+    assert "CREATE TABLE orchestrator.feedback" in ddl
 
 
 def test_event_identity_and_payload_constraints(migrated_engine: sa.Engine) -> None:

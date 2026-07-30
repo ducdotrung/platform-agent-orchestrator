@@ -5,8 +5,10 @@ from __future__ import annotations
 from sqlalchemy.orm import registry
 
 from .schema_0001 import build_metadata
+from .schema_0002 import add_feedback_table
 
 _mapper_registry = registry(metadata=build_metadata())
+add_feedback_table(_mapper_registry.metadata)
 Base = _mapper_registry.generate_base()
 
 
@@ -40,6 +42,10 @@ class ApprovalRecord(Base):
 
 class SideEffectRecord(Base):
     __table__ = Base.metadata.tables["orchestrator.side_effects"]
+
+
+class FeedbackRecord(Base):
+    __table__ = Base.metadata.tables["orchestrator.feedback"]
 
 
 class AuditEventRecord(Base):
