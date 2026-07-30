@@ -42,7 +42,14 @@ class PublicationPort(Protocol):
 
 
 class NotificationPort(Protocol):
-    def send(self, channel: str, message: str, *, idempotency_key: str) -> str: ...
+    def send(
+        self,
+        channel: str,
+        message: str,
+        *,
+        idempotency_key: str,
+        run_id: str | None = None,
+    ) -> str: ...
 
 
 class ActionPort(Protocol):

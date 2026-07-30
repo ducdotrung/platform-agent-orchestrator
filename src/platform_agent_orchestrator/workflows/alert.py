@@ -118,6 +118,7 @@ def build_alert_graph(services: PlatformServices, *, checkpointer: Any | None = 
             "sre-alerts",
             state["recommendation"],
             idempotency_key=f"{event.idempotency_key}:recommendation",
+            run_id=state.get("run_id", event.correlation_id),
         )
         return {"notification_receipt": receipt}
 

@@ -57,10 +57,15 @@ class WorkflowRegistry:
             raise ValueError(f"Unknown workflow: {workflow}")
         if event.type != expected:
             raise ValueError(f"Workflow {workflow!r} expects {expected}, received {event.type}")
-        state = {"event": event.model_dump(mode="json"), **(extra_state or {})}
+        stable_thread_id = thread_id or event.correlation_id
+        state = {
+            "event": event.model_dump(mode="json"),
+            "run_id": stable_thread_id,
+            **(extra_state or {}),
+        }
         with self.observability.trace_workflow(workflow, event) as trace:
             config = {
-                **checkpoint_config(thread_id or event.correlation_id),
+                **checkpoint_config(stable_thread_id),
                 "callbacks": trace.callbacks,
                 "tags": trace.tags,
                 "metadata": trace.metadata,

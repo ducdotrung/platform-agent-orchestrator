@@ -80,6 +80,7 @@ def build_knowledge_refresh_graph(
             "platform-knowledge",
             message,
             idempotency_key=f"{event.idempotency_key}:snapshot",
+            run_id=state.get("run_id", event.correlation_id),
         )
         return {"notification_receipt": receipt, "status": "published"}
 

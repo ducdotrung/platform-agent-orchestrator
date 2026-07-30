@@ -18,7 +18,7 @@ from platform_agent_orchestrator.contracts import (
     RiskLevel,
 )
 
-from .ports import PlatformServices
+from .ports import NotificationPort, PlatformServices
 
 
 def stable_id(*parts: str) -> str:
@@ -172,7 +172,14 @@ class DemoPublisher:
 class DemoNotifier:
     messages: dict[str, dict[str, str]] = field(default_factory=dict)
 
-    def send(self, channel: str, message: str, *, idempotency_key: str) -> str:
+    def send(
+        self,
+        channel: str,
+        message: str,
+        *,
+        idempotency_key: str,
+        run_id: str | None = None,
+    ) -> str:
         receipt = f"notification-{stable_id(channel, idempotency_key)}"
         self.messages.setdefault(
             idempotency_key, {"receipt": receipt, "channel": channel, "message": message}
@@ -214,12 +221,12 @@ class DemoPlatformServices:
     notifier: DemoNotifier = field(default_factory=DemoNotifier)
     actions: DemoActions = field(default_factory=DemoActions)
 
-    def as_services(self) -> PlatformServices:
+    def as_services(self, *, notifier: NotificationPort | None = None) -> PlatformServices:
         return PlatformServices(
             knowledge=self.knowledge,
             reasoner=self.reasoner,
             extractor=self.extractor,
             publisher=self.publisher,
-            notifier=self.notifier,
+            notifier=notifier or self.notifier,
             actions=self.actions,
         )

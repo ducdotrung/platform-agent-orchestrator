@@ -105,6 +105,7 @@ def build_sre_execution_graph(
             "sre-operations",
             f"Completed and verified {state['ticket']['key']}: {state['ticket']['summary']}",
             idempotency_key=f"{event.idempotency_key}:completion",
+            run_id=state.get("run_id", event.correlation_id),
         )
         return {"notification_receipt": receipt, "status": "completed"}
 
