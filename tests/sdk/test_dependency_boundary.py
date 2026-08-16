@@ -10,6 +10,7 @@ TARGETS = (
 )
 FORBIDDEN = {"langchain", "langgraph"}
 FORBIDDEN_PUBLIC_TYPES = {"Command", "CompiledGraph", "StateGraph"}
+FORBIDDEN_IMPLEMENTATION_PREFIXES = {"platform_agent_orchestrator.registry"}
 
 
 def imported_root(node: ast.Import | ast.ImportFrom) -> set[str]:
@@ -18,6 +19,12 @@ def imported_root(node: ast.Import | ast.ImportFrom) -> set[str]:
     if node.module is None:
         return set()
     return {node.module.partition(".")[0]}
+
+
+def imported_modules(node: ast.Import | ast.ImportFrom) -> set[str]:
+    if isinstance(node, ast.Import):
+        return {alias.name for alias in node.names}
+    return {node.module} if node.module is not None else set()
 
 
 def test_core_and_sdk_do_not_import_langchain_or_langgraph() -> None:
@@ -61,3 +68,22 @@ def test_core_and_sdk_do_not_expose_runtime_specific_types() -> None:
                         )
 
     assert violations == [], "runtime-specific public types:\n" + "\n".join(violations)
+
+
+def test_core_and_sdk_do_not_import_registry_implementations() -> None:
+    violations: list[str] = []
+
+    for target in TARGETS:
+        for path in target.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if not isinstance(node, (ast.Import, ast.ImportFrom)):
+                    continue
+                for module in imported_modules(node):
+                    if any(
+                        module == prefix or module.startswith(f"{prefix}.")
+                        for prefix in FORBIDDEN_IMPLEMENTATION_PREFIXES
+                    ):
+                        violations.append(f"{path.relative_to(ROOT)}:{node.lineno}: {module}")
+
+    assert violations == [], "implementation imports in core/sdk:\n" + "\n".join(violations)

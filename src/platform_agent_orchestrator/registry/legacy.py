@@ -1,4 +1,4 @@
-"""Workflow lookup and event-type validation."""
+"""Legacy workflow lookup retained until the Task 11 cleanup."""
 
 from __future__ import annotations
 
