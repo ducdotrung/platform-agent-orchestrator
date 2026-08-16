@@ -1,1 +1,5 @@
-"""Typed integration ports (contracts are introduced in later tasks)."""
+"""Typed integration ports."""
+
+from .memory import MemoryItem
+
+__all__ = ["MemoryItem"]

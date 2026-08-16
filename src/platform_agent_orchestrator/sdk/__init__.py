@@ -1,1 +1,64 @@
-"""Public extension SDK (contracts are introduced in Task 02)."""
+"""Provider-neutral public extension SDK."""
+
+from .agent import Agent, AgentRequest, AgentResult
+from .capability import CapabilityProvider
+from .flow import (
+    BaseFlow,
+    ConditionalRoute,
+    EdgeSpec,
+    Flow,
+    FlowDefinition,
+    FlowMetadata,
+    NodeCallable,
+    NodeSpec,
+)
+from .manifest import (
+    ManifestCapabilities,
+    ManifestFlow,
+    ManifestMetadata,
+    ManifestPermissions,
+    PluginManifest,
+    load_manifest,
+    parse_manifest,
+)
+from .nodes import NodeContext, NodeOutcome, PauseExecution, PauseRequest
+from .plugin import (
+    AgentRegistrar,
+    CapabilityRegistrar,
+    FlowRegistrar,
+    OrchestratorPlugin,
+    PluginContext,
+    PolicyRegistrar,
+)
+
+__all__ = [
+    "Agent",
+    "AgentRegistrar",
+    "AgentRequest",
+    "AgentResult",
+    "BaseFlow",
+    "CapabilityProvider",
+    "CapabilityRegistrar",
+    "ConditionalRoute",
+    "EdgeSpec",
+    "Flow",
+    "FlowDefinition",
+    "FlowMetadata",
+    "FlowRegistrar",
+    "ManifestCapabilities",
+    "ManifestFlow",
+    "ManifestMetadata",
+    "ManifestPermissions",
+    "NodeCallable",
+    "NodeContext",
+    "NodeOutcome",
+    "NodeSpec",
+    "OrchestratorPlugin",
+    "PauseExecution",
+    "PauseRequest",
+    "PluginContext",
+    "PluginManifest",
+    "PolicyRegistrar",
+    "load_manifest",
+    "parse_manifest",
+]
