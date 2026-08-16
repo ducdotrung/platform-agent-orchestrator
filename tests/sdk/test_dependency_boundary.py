@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[2]
 TARGETS = (
     ROOT / "src" / "platform_agent_orchestrator" / "core",
     ROOT / "src" / "platform_agent_orchestrator" / "sdk",
+    ROOT / "src" / "platform_agent_orchestrator" / "policy",
 )
 FORBIDDEN = {"langchain", "langgraph"}
 FORBIDDEN_PUBLIC_TYPES = {"Command", "CompiledGraph", "StateGraph"}
@@ -27,7 +28,7 @@ def imported_modules(node: ast.Import | ast.ImportFrom) -> set[str]:
     return {node.module} if node.module is not None else set()
 
 
-def test_core_and_sdk_do_not_import_langchain_or_langgraph() -> None:
+def test_contract_and_policy_layers_do_not_import_langchain_or_langgraph() -> None:
     violations: list[str] = []
 
     for target in TARGETS:
@@ -42,7 +43,7 @@ def test_core_and_sdk_do_not_import_langchain_or_langgraph() -> None:
     assert violations == [], "forbidden public-contract imports:\n" + "\n".join(violations)
 
 
-def test_core_and_sdk_do_not_expose_runtime_specific_types() -> None:
+def test_contract_and_policy_layers_do_not_expose_runtime_specific_types() -> None:
     violations: list[str] = []
 
     for target in TARGETS:
@@ -70,7 +71,7 @@ def test_core_and_sdk_do_not_expose_runtime_specific_types() -> None:
     assert violations == [], "runtime-specific public types:\n" + "\n".join(violations)
 
 
-def test_core_and_sdk_do_not_import_registry_implementations() -> None:
+def test_contract_and_policy_layers_do_not_import_registry_implementations() -> None:
     violations: list[str] = []
 
     for target in TARGETS:

@@ -9,6 +9,22 @@ class OrchestratorError(Exception):
     """Base class for expected orchestrator failures."""
 
 
+class ApprovalBindingError(OrchestratorError):
+    """Raised when an approval is not valid for an intended action."""
+
+
+class ApprovalActionMismatchError(ApprovalBindingError):
+    """Raised when approval and current action fingerprints differ."""
+
+
+class ApprovalIdentityMismatchError(ApprovalBindingError):
+    """Raised when an approval belongs to another execution identity."""
+
+
+class ApprovalRejectedError(ApprovalBindingError):
+    """Raised when a rejected decision is presented as execution approval."""
+
+
 class DuplicateRegistrationError(OrchestratorError):
     """Raised when a registry name is registered more than once."""
 

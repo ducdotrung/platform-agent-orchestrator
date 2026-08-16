@@ -6,8 +6,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from platform_agent_orchestrator.core.approvals import ApprovalRequest
 from platform_agent_orchestrator.core.context import ExecutionContext
 
 
@@ -29,6 +30,29 @@ class PauseRequest(BaseModel):
     reason: str = Field(min_length=1)
     payload: dict[str, Any] = Field(default_factory=dict)
     approval_id: str = Field(min_length=1)
+    approval: ApprovalRequest | None = None
+
+    @model_validator(mode="after")
+    def bind_typed_approval(self) -> PauseRequest:
+        if self.approval is not None and self.approval.approval_id != self.approval_id:
+            raise ValueError("pause approval_id must match the approval request")
+        return self
+
+    @classmethod
+    def for_approval(
+        cls,
+        approval: ApprovalRequest,
+        *,
+        payload: dict[str, Any] | None = None,
+    ) -> PauseRequest:
+        """Create a pause carrying a typed action approval request."""
+
+        return cls(
+            reason=approval.reason,
+            approval_id=approval.approval_id,
+            approval=approval,
+            payload=payload or {},
+        )
 
 
 class NodeOutcome(BaseModel):
