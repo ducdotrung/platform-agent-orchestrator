@@ -1,4 +1,4 @@
-"""Long-lived local API, worker, and migration process composition."""
+"""Legacy process composition retained until dispatcher/bootstrap migration."""
 
 from __future__ import annotations
 

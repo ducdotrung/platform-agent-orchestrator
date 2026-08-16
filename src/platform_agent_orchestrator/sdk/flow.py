@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Protocol, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -27,6 +28,14 @@ class FlowMetadata(BaseModel):
     tags: frozenset[str] = Field(default_factory=frozenset)
 
 
+class FlowTerminal(Enum):
+    """Framework-owned terminal targets understood by runtime adapters."""
+
+    END = "end"
+
+
+FLOW_END = FlowTerminal.END
+FlowTarget: TypeAlias = str | FlowTerminal
 NodeResult: TypeAlias = dict[str, Any] | NodeOutcome
 NodeCallable: TypeAlias = Callable[
     [dict[str, Any], NodeContext],
@@ -47,7 +56,7 @@ class EdgeSpec:
     """An unconditional transition between two node names."""
 
     source: str
-    target: str
+    target: FlowTarget
 
 
 @dataclass(frozen=True)
@@ -56,7 +65,7 @@ class ConditionalRoute:
 
     source: str
     router: Callable[[dict[str, Any]], str]
-    routes: Mapping[str, str]
+    routes: Mapping[str, FlowTarget]
 
 
 @dataclass

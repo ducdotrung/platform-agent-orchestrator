@@ -5,6 +5,7 @@ from typing import TypedDict
 
 from platform_agent_orchestrator.core import DomainEvent
 from platform_agent_orchestrator.sdk import (
+    FLOW_END,
     BaseFlow,
     ConditionalRoute,
     EdgeSpec,
@@ -36,12 +37,12 @@ class DummyFlow(BaseFlow):
             state_schema=ExampleState,
             entrypoint="answer",
             nodes=[NodeSpec(name="answer", handler=answer_node)],
-            edges=[EdgeSpec(source="answer", target="done")],
+            edges=[EdgeSpec(source="answer", target=FLOW_END)],
             conditional_routes=[
                 ConditionalRoute(
                     source="answer",
                     router=lambda state: "complete" if state.get("answer") else "retry",
-                    routes={"complete": "done", "retry": "answer"},
+                    routes={"complete": FLOW_END, "retry": "answer"},
                 )
             ],
         )
@@ -64,7 +65,8 @@ def test_dummy_flow_is_defined_without_runtime_library_types() -> None:
     assert definition.state_schema is ExampleState
     assert definition.entrypoint == "answer"
     assert [node.name for node in definition.nodes] == ["answer"]
-    assert definition.conditional_routes[0].routes["complete"] == "done"
+    assert definition.edges[0].target is FLOW_END
+    assert definition.conditional_routes[0].routes["complete"] is FLOW_END
 
 
 def test_base_flow_accepts_only_declared_namespaced_events() -> None:

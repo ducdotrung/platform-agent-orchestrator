@@ -10,7 +10,12 @@ TARGETS = (
     ROOT / "src" / "platform_agent_orchestrator" / "policy",
 )
 FORBIDDEN = {"langchain", "langgraph"}
-FORBIDDEN_PUBLIC_TYPES = {"Command", "CompiledGraph", "StateGraph"}
+FORBIDDEN_PUBLIC_TYPES = {
+    "Command",
+    "CompiledGraph",
+    "END",
+    "StateGraph",
+}
 FORBIDDEN_IMPLEMENTATION_PREFIXES = {"platform_agent_orchestrator.registry"}
 
 
