@@ -10,14 +10,10 @@ from typing import Any
 from uuid import uuid4
 
 from platform_agent_orchestrator.bootstrap import build_dependencies
-from platform_agent_orchestrator.contracts import (
-    DomainEvent,
-    EventType,
-)
 from platform_agent_orchestrator.core import DomainEvent as V2DomainEvent
 
 
-def sample_events() -> dict[str, DomainEvent | V2DomainEvent]:
+def sample_events() -> dict[str, V2DomainEvent]:
     return {
         "alert": V2DomainEvent(
             id="demo-alert-1",
@@ -54,12 +50,15 @@ def sample_events() -> dict[str, DomainEvent | V2DomainEvent]:
                 ],
             },
         ),
-        "sre": DomainEvent.from_legacy(
-            type=EventType.SRE_TICKET_UPDATED,
+        "sre": V2DomainEvent(
+            id="demo-sre-1",
+            type="sre.ticket.updated",
             source="jira",
             subject="INF-1001",
+            occurred_at=datetime.now(UTC),
+            correlation_id="demo-sre-correlation-1",
             idempotency_key="jira:INF-1001:3",
-            payload={
+            data={
                 "key": "INF-1001",
                 "summary": "Inspect payment-service health",
                 "service": "payment-service",
@@ -90,26 +89,15 @@ def compact_result(result: dict[str, Any]) -> dict[str, Any]:
 
 def run_demo(selection: str) -> int:
     dependencies = build_dependencies()
-    registry = dependencies.registry()
     try:
         events = sample_events()
         names = list(events) if selection == "all" else [selection]
         for name in names:
-            if name in {"alert", "engineering", "refresh"}:
-                migrated_event = events[name]
-                if not isinstance(migrated_event, V2DomainEvent):
-                    raise TypeError(f"{name} demo requires a v2 domain event")
-                dispatched = asyncio.run(
-                    dependencies.dispatcher().dispatch(migrated_event)
-                )
-                if len(dispatched) != 1:
-                    raise RuntimeError(f"{name} demo must resolve exactly one flow")
-                result = dispatched[0].output
-            else:
-                legacy_event = events[name]
-                if not isinstance(legacy_event, DomainEvent):
-                    raise TypeError("legacy demo requires a legacy domain event")
-                result = registry.invoke(name, legacy_event)
+            event = events[name]
+            dispatched = asyncio.run(dependencies.dispatcher().dispatch(event))
+            if len(dispatched) != 1:
+                raise RuntimeError(f"{name} demo must resolve exactly one flow")
+            result = dispatched[0].output
             print(f"\n=== {name} ===")
             print(json.dumps(compact_result(result), indent=2, default=str))
         return 0

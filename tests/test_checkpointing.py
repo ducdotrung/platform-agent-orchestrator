@@ -1,31 +1,36 @@
 from __future__ import annotations
 
-import sqlite3
+import asyncio
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from langgraph.checkpoint.sqlite import SqliteSaver
-from langgraph.types import Command
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from pydantic import SecretStr
 
 from platform_agent_orchestrator.adapters import DemoPlatformServices
+from platform_agent_orchestrator.bootstrap import build_dependencies
 from platform_agent_orchestrator.checkpointing import (
     _psycopg_connection_url,
     checkpoint_config,
     postgres_checkpointer,
     thread_id_for_run,
 )
-from platform_agent_orchestrator.contracts import DomainEvent, EventType
-from platform_agent_orchestrator.registry import WorkflowRegistry
+from platform_agent_orchestrator.core import DomainEvent
+from platform_agent_orchestrator.runtime import RunMetadata, RunStatus
 
 
 def risky_ticket() -> DomainEvent:
     return DomainEvent(
-        type=EventType.SRE_TICKET_UPDATED,
+        id="sre-restart-event",
+        type="sre.ticket.updated",
         source="sample-ticket-system",
         subject="INF-2",
+        occurred_at=datetime(2026, 8, 17, tzinfo=UTC),
+        correlation_id="sre-restart-correlation",
         idempotency_key="sample:ticket:INF-2",
-        payload={
+        tenant_id="tenant-1",
+        data={
             "key": "INF-2",
             "summary": "Restart production service",
             "service": "payment",
@@ -79,43 +84,51 @@ def test_postgres_factory_normalizes_sqlalchemy_driver_url(monkeypatch: pytest.M
 
 
 def test_process_restart_resumes_same_interrupted_thread(tmp_path: Path) -> None:
-    checkpoint_path = tmp_path / "checkpoints.db"
-    run_id = "run-INF-2"
-    event = risky_ticket()
-    first_demo = DemoPlatformServices()
+    async def exercise_restart() -> tuple[object, DemoPlatformServices]:
+        checkpoint_path = tmp_path / "checkpoints.db"
+        event = risky_ticket()
+        first_demo = DemoPlatformServices()
+        first_dependencies = build_dependencies(services=first_demo.as_services())
+        try:
+            async with AsyncSqliteSaver.from_conn_string(str(checkpoint_path)) as saver:
+                paused = (
+                    await first_dependencies.dispatcher(checkpointer=saver).dispatch(event)
+                )[0]
+            assert paused.status is RunStatus.PAUSED
+            assert paused.pause is not None
+            assert paused.pause.approval is not None
+            assert not first_demo.actions.results
+        finally:
+            first_dependencies.shutdown()
 
-    first_connection = sqlite3.connect(checkpoint_path, check_same_thread=False)
-    try:
-        first_registry = WorkflowRegistry(
-            first_demo.as_services(),
-            checkpointer=SqliteSaver(first_connection),
+        run = RunMetadata(
+            run_id=paused.run_id,
+            flow_name="sre",
+            flow_version=first_dependencies.flows.get("sre").metadata.version,
+            thread_id=paused.run_id,
+            correlation_id=event.correlation_id,
+            tenant_id=event.tenant_id,
+            status=RunStatus.PAUSED.value,
         )
-        paused = first_registry.invoke("sre", event, thread_id=run_id)
-        assert "__interrupt__" in paused
-        assert not first_demo.actions.results
-    finally:
-        first_connection.close()
+        second_demo = DemoPlatformServices()
+        second_dependencies = build_dependencies(services=second_demo.as_services())
+        try:
+            async with AsyncSqliteSaver.from_conn_string(str(checkpoint_path)) as saver:
+                resumed = await second_dependencies.dispatcher(checkpointer=saver).resume(
+                    run,
+                    {
+                        "approved": True,
+                        "actor": "sample-reviewer",
+                        "reason": "Hackathon restart-resume test",
+                    },
+                )
+        finally:
+            second_dependencies.shutdown()
+        return resumed, second_demo
 
-    second_demo = DemoPlatformServices()
-    second_connection = sqlite3.connect(checkpoint_path, check_same_thread=False)
-    try:
-        graph = WorkflowRegistry(
-            second_demo.as_services(),
-            checkpointer=SqliteSaver(second_connection),
-        ).build("sre")
-        resumed = graph.invoke(
-            Command(
-                resume={
-                    "approved": True,
-                    "actor": "sample-reviewer",
-                    "reason": "Hackathon restart-resume test",
-                }
-            ),
-            config=checkpoint_config(run_id),
-        )
-    finally:
-        second_connection.close()
+    resumed, second_demo = asyncio.run(exercise_restart())
 
-    assert resumed["status"] == "completed"
-    assert resumed["approval"]["actor"] == "sample-reviewer"
+    assert resumed.status is RunStatus.SUCCEEDED
+    assert resumed.output["status"] == "completed"
+    assert resumed.output["approval"]["actor"] == "sample-reviewer"
     assert len(second_demo.actions.results) == 1

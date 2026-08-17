@@ -7,6 +7,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from platform_agent_orchestrator.contracts import (
+    ActionRequest as LegacyActionRequest,
+)
+from platform_agent_orchestrator.contracts import (
+    ActionResult as LegacyActionResult,
+)
+from platform_agent_orchestrator.contracts import (
     DomainEvent as LegacyDomainEvent,
 )
 from platform_agent_orchestrator.contracts import (
@@ -19,6 +25,15 @@ from platform_agent_orchestrator.contracts import (
 from platform_agent_orchestrator.contracts import (
     KnowledgeArtifact as LegacyKnowledgeArtifact,
 )
+from platform_agent_orchestrator.contracts import (
+    RiskLevel as LegacyRiskLevel,
+)
+from platform_agent_orchestrator.core.actions import (
+    ActionIntent,
+    ActionResult,
+    RiskLevel,
+)
+from platform_agent_orchestrator.core.approvals import compute_action_hash
 from platform_agent_orchestrator.core.capabilities import CapabilityRequest, CapabilityResult
 from platform_agent_orchestrator.core.context import ExecutionContext
 from platform_agent_orchestrator.core.models import (
@@ -28,6 +43,7 @@ from platform_agent_orchestrator.core.models import (
 from platform_agent_orchestrator.ports.memory import MemoryItem
 
 from .ports import (
+    ActionPort,
     AlertClassificationPort,
     ExtractionPort,
     KnowledgePort,
@@ -361,4 +377,89 @@ class DemoAlertCapabilityProvider:
             success=True,
             data={"receipt": receipt},
             metadata={"provider": "demo", "idempotent": True},
+        )
+
+
+@dataclass(frozen=True)
+class DemoSRECapabilityProvider:
+    """Translate v2 action capabilities to deterministic demo action ports."""
+
+    actions: ActionPort
+    _action_hashes: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def capabilities(self) -> frozenset[str]:
+        return frozenset({"infra.execute", "infra.verify"})
+
+    async def invoke(
+        self,
+        request: CapabilityRequest,
+        *,
+        context: ExecutionContext,
+    ) -> CapabilityResult:
+        del context
+        try:
+            if request.capability == "infra.execute":
+                return self._execute(request)
+            if request.capability == "infra.verify":
+                return self._verify(request)
+        except (KeyError, TypeError, ValueError) as error:
+            return CapabilityResult(success=False, error=str(error))
+        return CapabilityResult(
+            success=False,
+            error=f"unsupported demo SRE capability: {request.capability}",
+        )
+
+    def _execute(self, request: CapabilityRequest) -> CapabilityResult:
+        action = ActionIntent.model_validate(request.arguments["action"])
+        action_hash = str(request.arguments["action_hash"])
+        expected_hash = compute_action_hash(action)
+        if action_hash != expected_hash:
+            raise ValueError("infra.execute action hash does not match the action intent")
+        previous_hash = self._action_hashes.setdefault(action.idempotency_key, action_hash)
+        if previous_hash != action_hash:
+            raise ValueError("action idempotency key reused with a different action intent")
+
+        risk = (
+            LegacyRiskLevel.RISKY
+            if action.requested_risk is RiskLevel.RISKY
+            else LegacyRiskLevel.SAFE
+        )
+        legacy_request = LegacyActionRequest(
+            action=action.operation,
+            target=action.resource or "unscoped",
+            parameters=action.arguments,
+            risk=risk,
+            idempotency_key=action.idempotency_key,
+        )
+        legacy_result = self.actions.execute(legacy_request)
+        result = ActionResult(
+            success=legacy_result.success,
+            status="completed" if legacy_result.success else "execution_failed",
+            output={"legacy_result": legacy_result.model_dump(mode="json")},
+            receipt_id=f"demo-action-{action_hash[:16]}",
+            error=None if legacy_result.success else legacy_result.summary,
+        )
+        return CapabilityResult(
+            success=True,
+            data={"result": result.model_dump(mode="json")},
+            metadata={"provider": "demo", "idempotent": True},
+        )
+
+    def _verify(self, request: CapabilityRequest) -> CapabilityResult:
+        action = ActionIntent.model_validate(request.arguments["action"])
+        action_hash = str(request.arguments["action_hash"])
+        if action_hash != compute_action_hash(action):
+            raise ValueError("infra.verify action hash does not match the action intent")
+        result = ActionResult.model_validate(request.arguments["execution_result"])
+        raw_legacy = result.output.get("legacy_result")
+        legacy_result = LegacyActionResult.model_validate(raw_legacy)
+        verified = self.actions.verify(legacy_result)
+        return CapabilityResult(
+            success=True,
+            data={
+                "verified": verified,
+                "reason": "demo action verification failed" if not verified else "verified",
+            },
+            metadata={"provider": "demo"},
         )

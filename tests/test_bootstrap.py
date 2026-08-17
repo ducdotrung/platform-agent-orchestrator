@@ -119,6 +119,8 @@ def test_bootstrap_builds_demo_dependencies_without_secret_graph_state() -> None
             "knowledge.publish",
             "memory.recall",
             "memory.record",
+            "infra.execute",
+            "infra.verify",
         }
     )
 

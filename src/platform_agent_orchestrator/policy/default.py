@@ -22,6 +22,12 @@ class DefaultPolicyEngine:
         self.config = config or DefaultPolicyConfig()
         self._risk_classifier = risk_classifier or RequestedRiskClassifier()
 
+    @property
+    def version(self) -> str:
+        """Return the configured version used for approval binding."""
+
+        return self.config.version
+
     async def evaluate(
         self,
         action: ActionIntent,

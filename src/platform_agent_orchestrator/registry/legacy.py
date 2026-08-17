@@ -12,9 +12,8 @@ from platform_agent_orchestrator.checkpointing import checkpoint_config
 from platform_agent_orchestrator.contracts import DomainEvent, EventType
 from platform_agent_orchestrator.observability import NoOpObservability, ObservabilityBackend
 from platform_agent_orchestrator.observability.base import ScoreDataType, ScoreValue, WorkflowTrace
-from platform_agent_orchestrator.workflows import build_sre_execution_graph
 
-WORKFLOW_EVENT_TYPES = {"sre": EventType.SRE_TICKET_UPDATED}
+WORKFLOW_EVENT_TYPES: dict[str, EventType] = {}
 
 
 @dataclass
@@ -24,7 +23,7 @@ class WorkflowRegistry:
     observability: ObservabilityBackend = field(default_factory=NoOpObservability)
 
     def build(self, workflow: str) -> Any:
-        factories = {"sre": build_sre_execution_graph}
+        factories: dict[str, Any] = {}
         try:
             factory = factories[workflow]
         except KeyError as exc:

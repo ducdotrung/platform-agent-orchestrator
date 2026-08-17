@@ -10,6 +10,7 @@ from platform_agent_orchestrator.adapters.demo_capabilities import (
     DemoAlertCapabilityProvider,
     DemoCapabilityProvider,
     DemoKnowledgeRefreshCapabilityProvider,
+    DemoSRECapabilityProvider,
 )
 from platform_agent_orchestrator.observability import (
     ObservabilityBackend,
@@ -28,10 +29,6 @@ from platform_agent_orchestrator.registry import (
 from platform_agent_orchestrator.runtime.context import ExecutionContextFactory
 from platform_agent_orchestrator.runtime.dispatcher import Dispatcher
 from platform_agent_orchestrator.runtime.langgraph import LangGraphWorkflowRuntime
-from platform_agent_orchestrator.runtime.legacy_adapter import (
-    LegacyWorkflowRuntime,
-    TransitionalWorkflowRuntime,
-)
 from platform_agent_orchestrator.sdk.plugin import PluginContext
 from platform_agent_orchestrator.settings import ApplicationSettings
 
@@ -90,12 +87,8 @@ class RuntimeDependencies:
     ) -> Dispatcher:
         """Compose registry routing with a runtime hidden behind WorkflowRuntime."""
 
-        runtime = TransitionalWorkflowRuntime(
-            primary=LangGraphWorkflowRuntime(checkpointer=checkpointer),
-            legacy=LegacyWorkflowRuntime(
-                self.registry(checkpointer=checkpointer, services=services)
-            ),
-        )
+        del services
+        runtime = LangGraphWorkflowRuntime(checkpointer=checkpointer)
         return Dispatcher(
             flows=self.flows,
             runtime=runtime,
@@ -136,6 +129,7 @@ def build_dependencies(
             composed_services.extractor, composed_services.publisher
         )
     )
+    capabilities.register(DemoSRECapabilityProvider(composed_services.actions))
     policies = _PolicyExtensions()
     register_builtin_plugins(
         PluginContext(
