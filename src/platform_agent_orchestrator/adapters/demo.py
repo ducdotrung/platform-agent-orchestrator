@@ -138,17 +138,48 @@ class DemoExtractor:
 @dataclass
 class DemoPublisher:
     publications: list[dict[str, Any]] = field(default_factory=list)
+    _publications_by_key: dict[str, tuple[str, str]] = field(default_factory=dict)
 
-    def publish(self, subject: str, revision: str, artifacts: list[KnowledgeArtifact]) -> str:
-        snapshot_id = stable_id(subject, revision, *(artifact.id for artifact in artifacts))
+    def publish(
+        self,
+        subject: str,
+        revision: str,
+        artifacts: list[KnowledgeArtifact],
+        *,
+        idempotency_key: str,
+    ) -> str:
+        fingerprint = stable_id(
+            subject,
+            revision,
+            *(
+                sorted(
+                    artifact.model_dump_json(
+                        exclude={"evidence": {"__all__": {"observed_at"}}}
+                    )
+                    for artifact in artifacts
+                )
+            ),
+        )
+        previous = self._publications_by_key.get(idempotency_key)
+        if previous is not None:
+            previous_fingerprint, snapshot_id = previous
+            if previous_fingerprint != fingerprint:
+                raise ValueError("idempotency key reused with different publication content")
+            return snapshot_id
+
+        snapshot_id = stable_id(
+            subject, revision, *(sorted(artifact.id for artifact in artifacts))
+        )
         self.publications.append(
             {
                 "snapshot_id": snapshot_id,
                 "subject": subject,
                 "revision": revision,
                 "artifacts": artifacts,
+                "idempotency_key": idempotency_key,
             }
         )
+        self._publications_by_key[idempotency_key] = (fingerprint, snapshot_id)
         return snapshot_id
 
 

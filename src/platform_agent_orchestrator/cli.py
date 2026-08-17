@@ -35,12 +35,15 @@ def sample_events() -> dict[str, DomainEvent | V2DomainEvent]:
                 environment="prod",
             ),
         ).to_domain_event(),
-        "refresh": DomainEvent.from_legacy(
-            type=EventType.PR_MERGED,
+        "refresh": V2DomainEvent(
+            id="demo-refresh-1",
+            type="scm.pull_request.merged",
             source="bitbucket",
             subject="payment-service",
+            occurred_at=datetime.now(UTC),
+            correlation_id="demo-refresh-correlation-1",
             idempotency_key="bitbucket:payment-service:abc123",
-            payload={
+            data={
                 "revision": "abc123",
                 "changed_files": [
                     "src/payment/client.py",
@@ -90,15 +93,15 @@ def run_demo(selection: str) -> int:
         events = sample_events()
         names = list(events) if selection == "all" else [selection]
         for name in names:
-            if name == "engineering":
-                engineering_event = events[name]
-                if not isinstance(engineering_event, V2DomainEvent):
-                    raise TypeError("engineering demo requires a v2 domain event")
+            if name in {"engineering", "refresh"}:
+                migrated_event = events[name]
+                if not isinstance(migrated_event, V2DomainEvent):
+                    raise TypeError(f"{name} demo requires a v2 domain event")
                 dispatched = asyncio.run(
-                    dependencies.dispatcher().dispatch(engineering_event)
+                    dependencies.dispatcher().dispatch(migrated_event)
                 )
                 if len(dispatched) != 1:
-                    raise RuntimeError("engineering demo must resolve exactly one flow")
+                    raise RuntimeError(f"{name} demo must resolve exactly one flow")
                 result = dispatched[0].output
             else:
                 legacy_event = events[name]

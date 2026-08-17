@@ -11,6 +11,7 @@ from platform_agent_orchestrator.sdk import (
     EdgeSpec,
     FlowDefinition,
     FlowMetadata,
+    JoinSpec,
     NodeContext,
     NodeSpec,
 )
@@ -67,6 +68,13 @@ def test_dummy_flow_is_defined_without_runtime_library_types() -> None:
     assert [node.name for node in definition.nodes] == ["answer"]
     assert definition.edges[0].target is FLOW_END
     assert definition.conditional_routes[0].routes["complete"] is FLOW_END
+
+
+def test_join_spec_is_runtime_neutral() -> None:
+    join = JoinSpec(sources=("left", "right"), target="merge")
+
+    assert join.sources == ("left", "right")
+    assert join.target == "merge"
 
 
 def test_base_flow_accepts_only_declared_namespaced_events() -> None:

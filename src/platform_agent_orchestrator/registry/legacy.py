@@ -14,13 +14,11 @@ from platform_agent_orchestrator.observability import NoOpObservability, Observa
 from platform_agent_orchestrator.observability.base import ScoreDataType, ScoreValue, WorkflowTrace
 from platform_agent_orchestrator.workflows import (
     build_alert_graph,
-    build_knowledge_refresh_graph,
     build_sre_execution_graph,
 )
 
 WORKFLOW_EVENT_TYPES = {
     "alert": EventType.ALERT_RECEIVED,
-    "refresh": EventType.PR_MERGED,
     "sre": EventType.SRE_TICKET_UPDATED,
 }
 
@@ -34,7 +32,6 @@ class WorkflowRegistry:
     def build(self, workflow: str) -> Any:
         factories = {
             "alert": build_alert_graph,
-            "refresh": build_knowledge_refresh_graph,
             "sre": build_sre_execution_graph,
         }
         try:

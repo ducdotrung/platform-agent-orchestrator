@@ -45,6 +45,8 @@ class LangGraphCompiler:
             graph.add_node(node.name, self._wrap_handler(node, context))
         for edge in definition.edges:
             graph.add_edge(edge.source, self._target(edge.target))
+        for join in definition.joins:
+            graph.add_edge(list(join.sources), self._target(join.target))
         for route in definition.conditional_routes:
             graph.add_conditional_edges(
                 route.source,
@@ -121,6 +123,18 @@ class LangGraphCompiler:
                 has_terminal = True
             elif edge.target not in known:
                 raise ValueError(f"unknown edge target: {edge.target}")
+        for join in definition.joins:
+            if len(join.sources) < 2:
+                raise ValueError("flow join must contain at least two sources")
+            if len(set(join.sources)) != len(join.sources):
+                raise ValueError("flow join contains duplicate sources")
+            unknown_sources = set(join.sources) - known
+            if unknown_sources:
+                raise ValueError(f"unknown join source: {sorted(unknown_sources)[0]}")
+            if join.target is FLOW_END:
+                has_terminal = True
+            elif join.target not in known:
+                raise ValueError(f"unknown join target: {join.target}")
         for route in definition.conditional_routes:
             if route.source not in known:
                 raise ValueError(f"unknown conditional source: {route.source}")

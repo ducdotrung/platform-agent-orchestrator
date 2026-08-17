@@ -57,31 +57,6 @@ def test_alert_enriches_and_notifies_actionable_incident() -> None:
     assert len(demo.notifier.messages) == 1
 
 
-def test_refresh_extracts_three_surfaces_and_publishes_one_snapshot() -> None:
-    demo = DemoPlatformServices()
-    registry = WorkflowRegistry(demo.as_services())
-    refresh = event(
-        EventType.PR_MERGED,
-        "payment-service",
-        {
-            "revision": "abc123",
-            "changed_files": ["src/app.py", "helm/values.yaml", "docs/contract.md"],
-        },
-    )
-
-    result = registry.invoke("refresh", refresh)
-
-    assert result["status"] == "published"
-    assert result["run_id"] == refresh.correlation_id
-    assert {item["artifact_type"] for item in result["artifacts"]} == {
-        "code",
-        "config",
-        "document",
-    }
-    assert not result["validation_errors"]
-    assert len(demo.publisher.publications) == 1
-
-
 def test_safe_sre_action_executes_without_interrupt() -> None:
     demo = DemoPlatformServices()
     registry = WorkflowRegistry(demo.as_services())

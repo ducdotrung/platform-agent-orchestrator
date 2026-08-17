@@ -60,6 +60,14 @@ class EdgeSpec:
 
 
 @dataclass(frozen=True)
+class JoinSpec:
+    """A barrier that advances after every source node has completed."""
+
+    sources: tuple[str, ...]
+    target: FlowTarget
+
+
+@dataclass(frozen=True)
 class ConditionalRoute:
     """A state-based route whose keys map to destination node names."""
 
@@ -76,6 +84,7 @@ class FlowDefinition:
     entrypoint: str
     nodes: list[NodeSpec] = field(default_factory=list)
     edges: list[EdgeSpec] = field(default_factory=list)
+    joins: list[JoinSpec] = field(default_factory=list)
     conditional_routes: list[ConditionalRoute] = field(default_factory=list)
 
 

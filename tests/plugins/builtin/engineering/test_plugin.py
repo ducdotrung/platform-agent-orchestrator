@@ -15,8 +15,12 @@ from platform_agent_orchestrator.core import (
     EvidenceRef,
     ExecutionContext,
 )
-from platform_agent_orchestrator.plugins.builtin import register_builtin_plugins
-from platform_agent_orchestrator.plugins.builtin.engineering import EngineeringFlow
+from platform_agent_orchestrator.plugins.builtin.engineering import (
+    EngineeringFlow,
+)
+from platform_agent_orchestrator.plugins.builtin.engineering import (
+    plugin as engineering_plugin,
+)
 from platform_agent_orchestrator.registry import (
     AgentRegistry,
     CapabilityRegistry,
@@ -169,7 +173,7 @@ def run_flow(
         agents=agents,
     )
     if agents is None:
-        register_builtin_plugins(context)
+        engineering_plugin.register(context)
     else:
         flows.register(EngineeringFlow())
     validate_registry(flows=flows, capabilities=capabilities)
@@ -266,7 +270,7 @@ def test_builtin_plugin_registration_and_dependency_boundary() -> None:
     capabilities.register(RecordingCapabilities())
     context, agents, flows = plugin_context(capabilities=capabilities)
 
-    register_builtin_plugins(context)
+    engineering_plugin.register(context)
     validate_registry(flows=flows, capabilities=capabilities)
 
     assert set(agents.list()) == {

@@ -34,7 +34,14 @@ class ExtractionPort(Protocol):
 
 
 class PublicationPort(Protocol):
-    def publish(self, subject: str, revision: str, artifacts: list[KnowledgeArtifact]) -> str: ...
+    def publish(
+        self,
+        subject: str,
+        revision: str,
+        artifacts: list[KnowledgeArtifact],
+        *,
+        idempotency_key: str,
+    ) -> str: ...
 
 
 class NotificationPort(Protocol):

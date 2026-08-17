@@ -102,7 +102,15 @@ def test_bootstrap_builds_demo_dependencies_without_secret_graph_state() -> None
     assert dependencies.settings.public_summary()["adapter_mode"] == "demo"
     assert dependencies.flows.get("alert").metadata.version == "1"
     assert dependencies.capabilities.names() == frozenset(
-        {"knowledge.search", "memory.recall"}
+        {
+            "knowledge.search",
+            "knowledge.extract.code",
+            "knowledge.extract.config",
+            "knowledge.extract.docs",
+            "knowledge.publish",
+            "memory.recall",
+            "memory.record",
+        }
     )
 
 

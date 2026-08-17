@@ -6,7 +6,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from platform_agent_orchestrator.adapters import DemoPlatformServices, PlatformServices
-from platform_agent_orchestrator.adapters.demo_capabilities import DemoCapabilityProvider
+from platform_agent_orchestrator.adapters.demo_capabilities import (
+    DemoCapabilityProvider,
+    DemoKnowledgeRefreshCapabilityProvider,
+)
 from platform_agent_orchestrator.observability import (
     ObservabilityBackend,
     ObservabilitySettings,
@@ -123,6 +126,9 @@ def build_dependencies(
     agents = AgentRegistry()
     capabilities = CapabilityRegistry()
     capabilities.register(DemoCapabilityProvider(demo.knowledge))
+    capabilities.register(
+        DemoKnowledgeRefreshCapabilityProvider(demo.extractor, demo.publisher)
+    )
     policies = _PolicyExtensions()
     register_builtin_plugins(
         PluginContext(

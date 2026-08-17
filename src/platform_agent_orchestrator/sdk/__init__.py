@@ -12,6 +12,7 @@ from .flow import (
     FlowMetadata,
     FlowTarget,
     FlowTerminal,
+    JoinSpec,
     NodeCallable,
     NodeSpec,
 )
@@ -51,6 +52,7 @@ __all__ = [
     "FlowTarget",
     "FlowTerminal",
     "FlowRegistrar",
+    "JoinSpec",
     "ManifestCapabilities",
     "ManifestFlow",
     "ManifestMetadata",
