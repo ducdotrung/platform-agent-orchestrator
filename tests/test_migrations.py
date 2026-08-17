@@ -52,7 +52,7 @@ def event_values(*, event_id: str, key: str, fingerprint: bytes = b"f" * 32) -> 
         "id": event_id,
         "scope_id": "sock-shop-sample",
         "source": "sample-sre-alert-agent",
-        "event_type": "alert.received",
+        "event_type": "monitoring.alert.received",
         "schema_version": "1",
         "subject": "orders-high-errors",
         "occurred_at": NOW,

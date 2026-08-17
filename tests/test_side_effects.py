@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -11,9 +12,11 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from platform_agent_orchestrator.adapters import DemoPlatformServices
 from platform_agent_orchestrator.adapters.demo import DemoNotifier
-from platform_agent_orchestrator.contracts import DomainEvent, EventType
+from platform_agent_orchestrator.bootstrap import build_dependencies
+from platform_agent_orchestrator.core import DomainEvent
 from platform_agent_orchestrator.persistence import SideEffectRecord
-from platform_agent_orchestrator.registry import WorkflowRegistry
+from platform_agent_orchestrator.runtime import RunMetadata
+from platform_agent_orchestrator.settings import ApplicationSettings
 from platform_agent_orchestrator.side_effects import (
     AmbiguousSideEffect,
     DatabaseSideEffectStore,
@@ -110,32 +113,50 @@ def test_expired_claim_becomes_unknown_and_is_not_blindly_retried(tmp_path: Path
         engine.dispose()
 
 
-def test_alert_workflow_uses_durable_demo_notifier(tmp_path: Path) -> None:
+def test_alert_capability_uses_durable_composed_notifier(tmp_path: Path) -> None:
     store, engine, _clock = store_for(tmp_path)
+    demo = DemoPlatformServices()
+    durable = DurableNotifier(store, demo.notifier, "sock-shop-sample")
+    dependencies = build_dependencies(
+        ApplicationSettings(),
+        services=demo.as_services(notifier=durable),
+    )
+    event = DomainEvent(
+        id="durable-alert-event",
+        type="monitoring.alert.received",
+        source="sample-sre-alert-agent",
+        subject="orders-high-errors",
+        occurred_at=NOW,
+        correlation_id="durable-alert-correlation",
+        idempotency_key="sample:orders:durable",
+        tenant_id="sock-shop-sample",
+        data={
+            "alert_id": "orders-high-errors",
+            "title": "Orders errors",
+            "service": "orders",
+            "severity": "critical",
+            "environment": "sample",
+            "count": 42,
+            "users": 7,
+        },
+    )
+    run = RunMetadata(
+        run_id=RUN_ID,
+        flow_name="alert",
+        flow_version="2.0.0",
+        thread_id=RUN_ID,
+        correlation_id=event.correlation_id,
+        tenant_id=event.tenant_id,
+        status="running",
+    )
     try:
-        demo = DemoPlatformServices()
-        durable = DurableNotifier(store, demo.notifier, "sock-shop-sample")
-        registry = WorkflowRegistry(demo.as_services(notifier=durable))
-        event = DomainEvent(
-            type=EventType.ALERT_RECEIVED,
-            source="sample-sre-alert-agent",
-            subject="orders-high-errors",
-            idempotency_key="sample:orders:durable",
-            payload={
-                "alert_id": "orders-high-errors",
-                "title": "Orders errors",
-                "service": "orders",
-                "severity": "critical",
-                "environment": "sample",
-                "count": 42,
-                "users": 7,
-            },
-        )
+        first = asyncio.run(dependencies.dispatcher().execute(run, event))
+        second = asyncio.run(dependencies.dispatcher().execute(run, event))
 
-        first = registry.invoke("alert", event, thread_id=RUN_ID)
-        second = registry.invoke("alert", event, thread_id=RUN_ID)
-
-        assert first["notification_receipt"] == second["notification_receipt"]
+        assert first.output["notification_receipt"] == second.output[
+            "notification_receipt"
+        ]
         assert len(demo.notifier.messages) == 1
     finally:
+        dependencies.shutdown()
         engine.dispose()

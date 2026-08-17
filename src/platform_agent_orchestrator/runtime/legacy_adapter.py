@@ -15,7 +15,6 @@ from platform_agent_orchestrator.runtime.engine import WorkflowRuntime
 from platform_agent_orchestrator.runtime.execution import RunResult, RunStatus
 from platform_agent_orchestrator.sdk.flow import BaseFlow, Flow, FlowDefinition, FlowMetadata
 from platform_agent_orchestrator.sdk.nodes import PauseRequest
-from platform_agent_orchestrator.sdk.plugin import FlowRegistrar
 
 
 class LegacyFlowHandle(BaseFlow):
@@ -120,12 +119,6 @@ class TransitionalWorkflowRuntime:
             context=context,
             flow=flow,
         )
-
-
-def register_legacy_alert(flows: FlowRegistrar) -> None:
-    """Register only the admitted legacy flow until its Task 09 migration."""
-
-    flows.register(LegacyFlowHandle("alert", "1", "alert.received"))
 
 
 def _legacy_event(event: DomainEvent) -> LegacyDomainEvent:

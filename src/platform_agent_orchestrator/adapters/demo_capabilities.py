@@ -27,7 +27,14 @@ from platform_agent_orchestrator.core.models import (
 )
 from platform_agent_orchestrator.ports.memory import MemoryItem
 
-from .ports import ExtractionPort, KnowledgePort, PublicationPort
+from .ports import (
+    AlertClassificationPort,
+    ExtractionPort,
+    KnowledgePort,
+    NotificationPort,
+    PublicationPort,
+    ReasoningPort,
+)
 
 
 @dataclass(frozen=True)
@@ -242,4 +249,116 @@ class DemoKnowledgeRefreshCapabilityProvider:
             success=True,
             data={"snapshot_id": snapshot_id},
             metadata={"provider": "demo", "atomic": True, "idempotent": True},
+        )
+
+
+@dataclass(frozen=True)
+class DemoAlertCapabilityProvider:
+    """Expose demo alert-domain work without placing policy in the flow."""
+
+    classifier: AlertClassificationPort
+    reasoner: ReasoningPort
+    notifier: NotificationPort
+
+    @property
+    def capabilities(self) -> frozenset[str]:
+        return frozenset(
+            {"alert.classify", "knowledge.change_impact", "notification.send"}
+        )
+
+    async def invoke(
+        self,
+        request: CapabilityRequest,
+        *,
+        context: ExecutionContext,
+    ) -> CapabilityResult:
+        try:
+            if request.capability == "alert.classify":
+                return self._classify(request)
+            if request.capability == "knowledge.change_impact":
+                return self._change_impact(request)
+            if request.capability == "notification.send":
+                return self._notify(request, context)
+        except (KeyError, TypeError, ValueError) as error:
+            return CapabilityResult(success=False, error=str(error))
+        return CapabilityResult(
+            success=False,
+            error=f"unsupported demo alert capability: {request.capability}",
+        )
+
+    def _classify(self, request: CapabilityRequest) -> CapabilityResult:
+        alert = request.arguments.get("alert")
+        if not isinstance(alert, dict):
+            raise TypeError("alert.classify requires an alert object")
+        classification = self.classifier.classify(dict(alert))
+        return CapabilityResult(
+            success=True,
+            data={"classification": classification},
+            metadata={"provider": "demo-sre-alert-agent"},
+        )
+
+    def _change_impact(self, request: CapabilityRequest) -> CapabilityResult:
+        alert = request.arguments.get("alert")
+        classification = request.arguments.get("classification")
+        raw_evidence = request.arguments.get("evidence", [])
+        if not isinstance(alert, dict) or not isinstance(classification, dict):
+            raise TypeError("knowledge.change_impact requires alert and classification objects")
+        if not isinstance(raw_evidence, list):
+            raise TypeError("knowledge.change_impact evidence must be a list")
+        evidence = [EvidenceRef.model_validate(item) for item in raw_evidence]
+        legacy_evidence = [
+            LegacyEvidenceRef(
+                id=str(item.metadata.get("id", item.locator)),
+                kind=EvidenceKind(item.kind),
+                source=str(item.metadata.get("source", "demo")),
+                locator=item.locator,
+                revision=item.revision,
+                summary=item.label or item.locator,
+                confidence=float(item.metadata.get("confidence", 1.0)),
+            )
+            for item in evidence
+        ]
+        enriched_alert = {**alert, "priority": classification.get("priority", "P3")}
+        decision = self.reasoner.assess_alert(enriched_alert, legacy_evidence)
+        summary = decision.summary
+        recommendation = (
+            f"{summary} Investigate {alert.get('service', 'unknown-service')} and its "
+            "documented dependencies; validate current health before any restart or rollback."
+        )
+        return CapabilityResult(
+            success=True,
+            data={
+                "impact": {
+                    "summary": summary,
+                    "confidence": decision.confidence,
+                    "reasons": decision.reasons,
+                    "evidence_ids": decision.evidence_ids,
+                    "requires_review": decision.status.value == "review",
+                    "recommendation": recommendation,
+                    "memory_worthy": classification.get("priority") in {"P0", "P1"},
+                }
+            },
+            metadata={"provider": "demo"},
+        )
+
+    def _notify(
+        self,
+        request: CapabilityRequest,
+        context: ExecutionContext,
+    ) -> CapabilityResult:
+        channel = str(request.arguments.get("channel", "")).strip()
+        message = str(request.arguments.get("message", "")).strip()
+        idempotency_key = str(request.arguments.get("idempotency_key", "")).strip()
+        if not channel or not message or not idempotency_key:
+            raise ValueError("notification.send requires channel, message, and idempotency_key")
+        receipt = self.notifier.send(
+            channel,
+            message,
+            idempotency_key=idempotency_key,
+            run_id=context.identity.run_id,
+        )
+        return CapabilityResult(
+            success=True,
+            data={"receipt": receipt},
+            metadata={"provider": "demo", "idempotent": True},
         )

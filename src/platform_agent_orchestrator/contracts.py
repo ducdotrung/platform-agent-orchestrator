@@ -15,7 +15,7 @@ def utc_now() -> datetime:
 
 
 class EventType(StrEnum):
-    ALERT_RECEIVED = "alert.received"
+    ALERT_RECEIVED = "monitoring.alert.received"
     PR_MERGED = "scm.pull_request.merged"
     SRE_TICKET_UPDATED = "sre.ticket.updated"
     ENGINEERING_QUESTION = "engineering.question"
@@ -118,7 +118,7 @@ class EventEnvelopeV1(BaseModel):
 
     schema_version: Literal["1"] = "1"
     id: str = Field(default_factory=lambda: str(uuid4()), min_length=1, max_length=128)
-    type: Literal["alert.received"] = "alert.received"
+    type: Literal["monitoring.alert.received"] = "monitoring.alert.received"
     source: str = Field(min_length=1, max_length=128)
     subject: str = Field(min_length=1, max_length=256)
     occurred_at: datetime = Field(default_factory=utc_now)

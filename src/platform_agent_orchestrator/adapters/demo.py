@@ -68,6 +68,41 @@ class DemoKnowledge:
 
 
 @dataclass
+class DemoAlertClassifier:
+    """Demo-only alert policy standing in for the sre-alert-agent capability."""
+
+    def classify(self, alert: dict[str, Any]) -> dict[str, Any]:
+        title = str(alert.get("title", "")).lower()
+        known_noise = ("client disconnected", "cancelled request", "health check")
+        suppressed = any(marker in title for marker in known_noise) and int(
+            alert.get("count", 1)
+        ) < 100
+        if suppressed:
+            return {
+                "suppressed": True,
+                "suppression_reason": "Matched a bounded demo noise rule",
+                "classification": "known-noise",
+            }
+
+        severity = str(alert.get("severity", "warning"))
+        users = int(alert.get("users", 0))
+        count = int(alert.get("count", 1))
+        if severity in {"fatal", "critical"} or users >= 50:
+            priority = "P0"
+        elif count >= 100 or users >= 10:
+            priority = "P1"
+        elif count >= 20:
+            priority = "P2"
+        else:
+            priority = "P3"
+        return {
+            "suppressed": False,
+            "classification": "actionable",
+            "priority": priority,
+        }
+
+
+@dataclass
 class DemoReasoner:
     def assess_alert(self, alert: dict[str, Any], evidence: list[EvidenceRef]) -> AgentDecision:
         priority = alert.get("priority", "P3")
@@ -230,6 +265,7 @@ class DemoActions:
 @dataclass
 class DemoPlatformServices:
     knowledge: DemoKnowledge = field(default_factory=DemoKnowledge)
+    alert_classifier: DemoAlertClassifier = field(default_factory=DemoAlertClassifier)
     reasoner: DemoReasoner = field(default_factory=DemoReasoner)
     extractor: DemoExtractor = field(default_factory=DemoExtractor)
     publisher: DemoPublisher = field(default_factory=DemoPublisher)
@@ -239,6 +275,7 @@ class DemoPlatformServices:
     def as_services(self, *, notifier: NotificationPort | None = None) -> PlatformServices:
         return PlatformServices(
             knowledge=self.knowledge,
+            alert_classifier=self.alert_classifier,
             reasoner=self.reasoner,
             extractor=self.extractor,
             publisher=self.publisher,

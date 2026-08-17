@@ -157,15 +157,15 @@ def test_registry_records_workflow_metadata_and_scores() -> None:
         observability=backend,
     )
 
-    result = registry.invoke("alert", sample_events()["alert"])
+    result = registry.invoke("sre", sample_events()["sre"])
 
     assert backend.trace is not None
     assert backend.trace.completed == result
-    assert backend.trace.metadata["workflow"] == "alert"
-    assert backend.trace.metadata["event_type"] == "alert.received"
+    assert backend.trace.metadata["workflow"] == "sre"
+    assert backend.trace.metadata["event_type"] == "sre.ticket.updated"
     assert "event" not in backend.trace.metadata
     assert "idempotency_key" not in backend.trace.metadata
-    assert ("decision.confidence", 0.91, "NUMERIC") in backend.trace.scores
+    assert ("action.verified", True, "BOOLEAN") in backend.trace.scores
 
     registry.score_trace("trace-1", "human.correctness", True, data_type="BOOLEAN")
     assert backend.delayed_scores == [("trace-1", "human.correctness", True)]

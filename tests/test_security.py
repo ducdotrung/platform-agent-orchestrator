@@ -27,7 +27,7 @@ PATH = "/v1/test-events"
 def event_data() -> dict[str, Any]:
     return {
         "schema_version": "1",
-        "type": "alert.received",
+        "type": "monitoring.alert.received",
         "source": "sample-sre-alert-agent",
         "subject": "orders-high-errors",
         "idempotency_key": "sample:orders-high-errors:2026-07-30T12",

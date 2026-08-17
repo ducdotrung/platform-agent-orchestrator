@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from pydantic import ValidationError
 
@@ -93,17 +95,24 @@ def test_bootstrap_builds_demo_dependencies_without_secret_graph_state() -> None
         }
     )
     try:
-        result = dependencies.registry().invoke("alert", sample_events()["alert"])
+        dispatched = asyncio.run(
+            dependencies.dispatcher().dispatch(sample_events()["alert"])
+        )
+        assert len(dispatched) == 1
+        result = dispatched[0].output
     finally:
         dependencies.shutdown()
 
     assert result["status"] == "notified"
     assert secret not in str(result)
     assert dependencies.settings.public_summary()["adapter_mode"] == "demo"
-    assert dependencies.flows.get("alert").metadata.version == "1"
+    assert dependencies.flows.get("alert").metadata.version == "2.0.0"
     assert dependencies.capabilities.names() == frozenset(
         {
+            "alert.classify",
             "knowledge.search",
+            "knowledge.change_impact",
+            "notification.send",
             "knowledge.extract.code",
             "knowledge.extract.config",
             "knowledge.extract.docs",

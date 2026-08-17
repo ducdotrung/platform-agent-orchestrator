@@ -79,7 +79,7 @@ def submit_event(*, base_url: str, secret: str) -> str:
     body = json.dumps(
         {
             "schema_version": "1",
-            "type": "alert.received",
+            "type": "monitoring.alert.received",
             "source": KEY_ID,
             "subject": "orders-high-errors",
             "idempotency_key": f"sample:compose-smoke:{secrets.token_hex(12)}",

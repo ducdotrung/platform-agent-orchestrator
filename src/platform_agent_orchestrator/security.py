@@ -337,7 +337,7 @@ class AdmissionSecurity:
                 raise AdmissionSecurityError(
                     422, "event_validation_failed", "Event validation failed"
                 ) from error
-            if envelope.source != key_id or envelope.type != "alert.received":
+            if envelope.source != key_id or envelope.type != "monitoring.alert.received":
                 self._forbidden()
             if envelope.payload.service not in self.settings.allowed_services:
                 self._forbidden()

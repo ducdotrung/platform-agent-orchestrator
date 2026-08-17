@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 from platform_agent_orchestrator.adapters import DemoPlatformServices, PlatformServices
 from platform_agent_orchestrator.adapters.demo_capabilities import (
+    DemoAlertCapabilityProvider,
     DemoCapabilityProvider,
     DemoKnowledgeRefreshCapabilityProvider,
 )
@@ -30,7 +31,6 @@ from platform_agent_orchestrator.runtime.langgraph import LangGraphWorkflowRunti
 from platform_agent_orchestrator.runtime.legacy_adapter import (
     LegacyWorkflowRuntime,
     TransitionalWorkflowRuntime,
-    register_legacy_alert,
 )
 from platform_agent_orchestrator.sdk.plugin import PluginContext
 from platform_agent_orchestrator.settings import ApplicationSettings
@@ -47,9 +47,7 @@ class _PolicyExtensions:
 
 
 def _default_flows() -> FlowRegistry:
-    flows = FlowRegistry()
-    register_legacy_alert(flows)
-    return flows
+    return FlowRegistry()
 
 
 @dataclass(frozen=True)
@@ -112,22 +110,31 @@ def build_dependencies(
     settings: ApplicationSettings | None = None,
     *,
     environ: Mapping[str, str] | None = None,
+    services: PlatformServices | None = None,
 ) -> RuntimeDependencies:
     if settings is not None and environ is not None:
         raise ValueError("pass settings or environ, not both")
     application_settings = settings or ApplicationSettings.from_env(environ)
     if application_settings.adapter_mode != "demo":
         raise ValueError(f"unsupported adapter mode: {application_settings.adapter_mode}")
-    demo = DemoPlatformServices()
-    services = demo.as_services()
+    composed_services = services or DemoPlatformServices().as_services()
     observability_settings = ObservabilitySettings.from_env(environ)
     observability = build_observability(observability_settings)
     flows = FlowRegistry()
     agents = AgentRegistry()
     capabilities = CapabilityRegistry()
-    capabilities.register(DemoCapabilityProvider(demo.knowledge))
+    capabilities.register(DemoCapabilityProvider(composed_services.knowledge))
     capabilities.register(
-        DemoKnowledgeRefreshCapabilityProvider(demo.extractor, demo.publisher)
+        DemoAlertCapabilityProvider(
+            composed_services.alert_classifier,
+            composed_services.reasoner,
+            composed_services.notifier
+        )
+    )
+    capabilities.register(
+        DemoKnowledgeRefreshCapabilityProvider(
+            composed_services.extractor, composed_services.publisher
+        )
     )
     policies = _PolicyExtensions()
     register_builtin_plugins(
@@ -138,11 +145,10 @@ def build_dependencies(
             policies=policies,
         )
     )
-    register_legacy_alert(flows)
     validate_registry(flows=flows, capabilities=capabilities)
     return RuntimeDependencies(
         settings=application_settings,
-        services=services,
+        services=composed_services,
         observability=observability,
         flows=flows,
         agents=agents,

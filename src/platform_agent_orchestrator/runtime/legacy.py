@@ -141,7 +141,7 @@ async def run_worker(stop_event: asyncio.Event | None = None) -> None:
     services = demo.as_services(
         notifier=DurableNotifier(side_effect_store, demo.notifier, settings.scope_id)
     )
-    dependencies = build_dependencies(settings)
+    dependencies = build_dependencies(settings, services=services)
     stop = stop_event or asyncio.Event()
     loop = asyncio.get_running_loop()
     if stop_event is None:

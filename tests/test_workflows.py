@@ -18,45 +18,6 @@ def event(event_type: EventType, subject: str, payload: dict) -> DomainEvent:
     )
 
 
-def test_alert_suppresses_bounded_known_noise_without_reasoning() -> None:
-    demo = DemoPlatformServices()
-    registry = WorkflowRegistry(demo.as_services())
-    alert = event(
-        EventType.ALERT_RECEIVED,
-        "CLIENT-1",
-        {"title": "Client disconnected", "count": 4, "severity": "warning"},
-    )
-
-    result = registry.invoke("alert", alert)
-
-    assert result["status"] == "suppressed"
-    assert not demo.notifier.messages
-
-
-def test_alert_enriches_and_notifies_actionable_incident() -> None:
-    demo = DemoPlatformServices()
-    registry = WorkflowRegistry(demo.as_services())
-    alert = event(
-        EventType.ALERT_RECEIVED,
-        "PAYMENT-1",
-        {
-            "title": "Payment timeout",
-            "service": "order-service",
-            "count": 200,
-            "users": 25,
-            "severity": "critical",
-        },
-    )
-
-    result = registry.invoke("alert", alert)
-
-    assert result["status"] == "notified"
-    assert result["run_id"] == alert.correlation_id
-    assert result["alert"]["priority"] == "P0"
-    assert result["decision"]["evidence_ids"]
-    assert len(demo.notifier.messages) == 1
-
-
 def test_safe_sre_action_executes_without_interrupt() -> None:
     demo = DemoPlatformServices()
     registry = WorkflowRegistry(demo.as_services())
@@ -119,8 +80,8 @@ def test_registry_rejects_wrong_event_type() -> None:
     wrong = event(EventType.ENGINEERING_QUESTION, "q", {"question": "hello"})
 
     try:
-        registry.invoke("alert", wrong)
+        registry.invoke("sre", wrong)
     except ValueError as exc:
         assert "expects" in str(exc)
     else:
-        raise AssertionError("expected registry to reject a mismatched event")
+        raise AssertionError("expected registry to reject a mismatched SRE event")

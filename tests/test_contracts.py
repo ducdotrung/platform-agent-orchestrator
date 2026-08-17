@@ -16,7 +16,7 @@ from platform_agent_orchestrator.contracts import (
 def valid_alert_envelope() -> dict[str, object]:
     return {
         "schema_version": "1",
-        "type": "alert.received",
+        "type": "monitoring.alert.received",
         "source": "sample-sre-alert-agent",
         "subject": "orders-high-errors",
         "idempotency_key": "sample:orders-high-errors:2026-07-30T10",

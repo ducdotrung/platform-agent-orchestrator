@@ -11,9 +11,7 @@ from uuid import uuid4
 
 from platform_agent_orchestrator.bootstrap import build_dependencies
 from platform_agent_orchestrator.contracts import (
-    AlertReceivedPayloadV1,
     DomainEvent,
-    EventEnvelopeV1,
     EventType,
 )
 from platform_agent_orchestrator.core import DomainEvent as V2DomainEvent
@@ -21,20 +19,24 @@ from platform_agent_orchestrator.core import DomainEvent as V2DomainEvent
 
 def sample_events() -> dict[str, DomainEvent | V2DomainEvent]:
     return {
-        "alert": EventEnvelopeV1(
+        "alert": V2DomainEvent(
+            id="demo-alert-1",
+            type="monitoring.alert.received",
             source="sentry",
             subject="PAYMENT-502",
+            occurred_at=datetime.now(UTC),
+            correlation_id="demo-alert-correlation-1",
             idempotency_key="sentry:PAYMENT-502:2026-07-27T10",
-            payload=AlertReceivedPayloadV1(
-                alert_id="PAYMENT-502",
-                title="Payment dependency timeout",
-                service="order-service",
-                severity="critical",
-                count=240,
-                users=72,
-                environment="prod",
-            ),
-        ).to_domain_event(),
+            data={
+                "alert_id": "PAYMENT-502",
+                "title": "Payment dependency timeout",
+                "service": "order-service",
+                "severity": "critical",
+                "count": 240,
+                "users": 72,
+                "environment": "prod",
+            },
+        ),
         "refresh": V2DomainEvent(
             id="demo-refresh-1",
             type="scm.pull_request.merged",
@@ -93,7 +95,7 @@ def run_demo(selection: str) -> int:
         events = sample_events()
         names = list(events) if selection == "all" else [selection]
         for name in names:
-            if name in {"engineering", "refresh"}:
+            if name in {"alert", "engineering", "refresh"}:
                 migrated_event = events[name]
                 if not isinstance(migrated_event, V2DomainEvent):
                     raise TypeError(f"{name} demo requires a v2 domain event")

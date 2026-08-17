@@ -289,7 +289,7 @@ def test_durable_outbox_worker_executes_registry_flow_through_runtime(
         metadata = FlowMetadata(
             name="alert",
             version="1",
-            event_types=frozenset({"alert.received"}),
+            event_types=frozenset({"monitoring.alert.received"}),
         )
 
         def define(self) -> FlowDefinition:

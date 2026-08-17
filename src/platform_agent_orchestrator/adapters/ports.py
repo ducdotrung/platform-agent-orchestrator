@@ -19,6 +19,10 @@ class KnowledgePort(Protocol):
     def search(self, query: str, *, limit: int = 8) -> list[EvidenceRef]: ...
 
 
+class AlertClassificationPort(Protocol):
+    def classify(self, alert: dict[str, Any]) -> dict[str, Any]: ...
+
+
 class ReasoningPort(Protocol):
     def assess_alert(self, alert: dict[str, Any], evidence: list[EvidenceRef]) -> AgentDecision: ...
 
@@ -64,6 +68,7 @@ class ActionPort(Protocol):
 @dataclass(frozen=True)
 class PlatformServices:
     knowledge: KnowledgePort
+    alert_classifier: AlertClassificationPort
     reasoner: ReasoningPort
     extractor: ExtractionPort
     publisher: PublicationPort
