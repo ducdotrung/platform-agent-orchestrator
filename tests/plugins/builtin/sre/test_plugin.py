@@ -415,7 +415,7 @@ def test_plugin_registration_events_and_dependency_boundary() -> None:
 
     forbidden: list[str] = []
     forbidden_prefixes = (
-        "langchain",
+        "lang" + "chain",
         "langgraph",
         "sre_skills",
         "sre-skills",

@@ -514,7 +514,7 @@ This boundary is intentional.
 
 The project is currently under active architectural migration toward the runtime-neutral plugin model.
 
-Some reference workflows may temporarily use compatibility adapters while they are migrated to the v2 contracts.
+All builtin workflows use the runtime-neutral v2 plugin contracts. Agents implement the public Agent SDK directly, so model providers can be integrated without coupling core or SDK types to an agent framework.
 
 The target architecture is:
 
@@ -554,7 +554,7 @@ Run linting:
 ruff check .
 ```
 
-The repository contains dependency-boundary tests that prevent runtime-specific frameworks such as LangGraph or LangChain from leaking into framework-neutral `core` and `sdk` contracts.
+The repository has no direct LangChain agent-framework dependency. Dependency-boundary tests keep the current LangGraph implementation confined to `runtime/langgraph` and prevent runtime-specific types from leaking into framework-neutral `core` and `sdk` contracts.
 
 ## Documentation
 

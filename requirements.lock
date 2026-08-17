@@ -49,11 +49,8 @@ jsonpatch==1.33
     # via langchain-core
 jsonpointer==3.1.1
     # via jsonpatch
-langchain==1.3.14
-    # via platform-agent-orchestrator (pyproject.toml)
 langchain-core==1.5.2
     # via
-    #   langchain
     #   langgraph
     #   langgraph-checkpoint
     #   langgraph-prebuilt
@@ -63,9 +60,7 @@ langchain-protocol==0.0.18
     #   langchain-core
     #   langgraph-sdk
 langgraph==1.2.10
-    # via
-    #   langchain
-    #   platform-agent-orchestrator (pyproject.toml)
+    # via platform-agent-orchestrator (pyproject.toml)
 langgraph-checkpoint==4.1.1
     # via
     #   langgraph
@@ -109,7 +104,6 @@ psycopg-pool==3.3.1
 pydantic==2.13.4
     # via
     #   fastapi
-    #   langchain
     #   langchain-core
     #   langgraph
     #   langsmith

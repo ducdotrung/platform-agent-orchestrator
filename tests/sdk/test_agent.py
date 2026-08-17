@@ -28,4 +28,4 @@ def test_agent_result_rejects_invalid_confidence(confidence: float) -> None:
 
 def test_agent_request_rejects_provider_specific_extra_fields() -> None:
     with pytest.raises(ValidationError):
-        AgentRequest(task="answer", langchain_messages=[])  # type: ignore[call-arg]
+        AgentRequest(task="answer", provider_messages=[])  # type: ignore[call-arg]

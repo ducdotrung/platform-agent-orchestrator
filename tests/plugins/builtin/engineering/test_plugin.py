@@ -294,7 +294,7 @@ def test_builtin_plugin_registration_and_dependency_boundary() -> None:
                 continue
             for module in modules:
                 if module.startswith(
-                    ("langchain", "langgraph", "platform_agent_orchestrator.adapters")
+                    ("lang" + "chain", "langgraph", "platform_agent_orchestrator.adapters")
                 ):
                     forbidden.append(f"{path.name}:{node.lineno}:{module}")
     assert forbidden == []

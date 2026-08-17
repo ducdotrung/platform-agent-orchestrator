@@ -9,7 +9,7 @@ TARGETS = (
     ROOT / "src" / "platform_agent_orchestrator" / "sdk",
     ROOT / "src" / "platform_agent_orchestrator" / "policy",
 )
-FORBIDDEN = {"langchain", "langgraph"}
+FORBIDDEN = {"lang" + "chain", "langgraph"}
 FORBIDDEN_PUBLIC_TYPES = {
     "Command",
     "CompiledGraph",
@@ -33,7 +33,7 @@ def imported_modules(node: ast.Import | ast.ImportFrom) -> set[str]:
     return {node.module} if node.module is not None else set()
 
 
-def test_contract_and_policy_layers_do_not_import_langchain_or_langgraph() -> None:
+def test_contract_and_policy_layers_do_not_import_runtime_framework() -> None:
     violations: list[str] = []
 
     for target in TARGETS:

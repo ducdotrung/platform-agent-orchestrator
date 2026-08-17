@@ -16,7 +16,6 @@ ScoreValue = float | str | bool
 class WorkflowTrace:
     """Per-invocation trace hooks without coupling orchestration to a vendor SDK."""
 
-    callbacks: list[Any] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     trace_id: str | None = None

@@ -24,11 +24,11 @@ during graceful termination.
 
 ## Trace model
 
-Each registry invocation creates one `workflow.<name>` root observation. The
-LangChain callback supplied in the LangGraph invocation captures child graph,
-chain, model, and tool activity under the current trace. The event correlation
-ID becomes a Langfuse session ID, so retries and human-review resumes can be
-examined together without forcing them to share one trace ID.
+When an application integration opens a workflow trace, the backend creates one
+`workflow.<name>` root observation using the native Langfuse observation context.
+It does not inject agent-framework callbacks into graph invocation. The event
+correlation ID becomes a Langfuse session ID, so retries and human-review resumes
+can be examined together without forcing them to share one trace ID.
 
 Exported root metadata is intentionally bounded to workflow and event
 identifiers. Domain event payloads, idempotency keys, evidence bodies,

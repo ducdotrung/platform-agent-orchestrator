@@ -7,7 +7,6 @@ from contextlib import contextmanager
 from typing import Any
 
 from langfuse import Langfuse, propagate_attributes
-from langfuse.langchain import CallbackHandler
 
 from platform_agent_orchestrator.core.events import DomainEvent
 
@@ -25,10 +24,9 @@ from .settings import ObservabilitySettings
 
 class LangfuseWorkflowTrace(WorkflowTrace):
     def __init__(
-        self, *, span: Any, callbacks: list[Any], tags: list[str], metadata: dict[str, Any]
+        self, *, span: Any, tags: list[str], metadata: dict[str, Any]
     ):
         super().__init__(
-            callbacks=callbacks,
             tags=tags,
             metadata=metadata,
             trace_id=span.trace_id,
@@ -96,7 +94,6 @@ class LangfuseObservability:
             ) as span:
                 yield LangfuseWorkflowTrace(
                     span=span,
-                    callbacks=[CallbackHandler(public_key=self._settings.public_key)],
                     tags=tags,
                     metadata=metadata,
                 )
