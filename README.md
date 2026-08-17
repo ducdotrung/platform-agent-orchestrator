@@ -565,6 +565,7 @@ See:
 - `docs/architecture.md` for architecture and ownership boundaries;
 - `docs/observability.md` for tracing and evaluation;
 - `docs/persistence.md` for durable execution;
+- `docs/tencent-memory.md` for optional TencentDB Agent Memory configuration;
 - `docs/adr/` for architecture decisions;
 - `docs/security/` for threat models and security boundaries.
 

@@ -8,6 +8,10 @@ from platform_agent_orchestrator.core.context import ExecutionContext
 from platform_agent_orchestrator.core.memory import MemoryItem, MemoryQuery, MemoryRecord
 
 
+class MemoryPortError(RuntimeError):
+    """Expected provider failure safe to expose as a failed capability result."""
+
+
 @runtime_checkable
 class MemoryPort(Protocol):
     """Recall and selectively update execution learnings."""

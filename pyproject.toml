@@ -22,6 +22,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+tencent-memory = [
+  "httpx>=0.27,<1.0",
+]
 observability = [
   "langfuse>=4.0,<5.0",
 ]

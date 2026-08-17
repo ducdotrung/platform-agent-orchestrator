@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from platform_agent_orchestrator.core.capabilities import CapabilityRequest, CapabilityResult
 from platform_agent_orchestrator.core.context import ExecutionContext
 from platform_agent_orchestrator.core.memory import MemoryQuery, MemoryRecord
-from platform_agent_orchestrator.ports.memory import MemoryPort
+from platform_agent_orchestrator.ports.memory import MemoryPort, MemoryPortError
 
 
 @dataclass(frozen=True)
@@ -63,7 +63,7 @@ class MemoryCapabilityProvider:
                     success=True,
                     data={"memory_id": memory_id, "accepted": True},
                 )
-        except (KeyError, TypeError, ValueError) as error:
+        except (KeyError, MemoryPortError, TypeError, ValueError) as error:
             return CapabilityResult(success=False, error=str(error))
         return CapabilityResult(
             success=False,

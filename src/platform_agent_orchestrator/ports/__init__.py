@@ -1,5 +1,5 @@
 """Typed integration ports."""
 
-from .memory import MemoryPort
+from .memory import MemoryPort, MemoryPortError
 
-__all__ = ["MemoryPort"]
+__all__ = ["MemoryPort", "MemoryPortError"]
