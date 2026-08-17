@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from platform_agent_orchestrator.adapters import DemoPlatformServices, PlatformServices
+from platform_agent_orchestrator.adapters.demo_capabilities import DemoCapabilityProvider
 from platform_agent_orchestrator.observability import (
     ObservabilityBackend,
     ObservabilitySettings,
@@ -22,8 +23,10 @@ from platform_agent_orchestrator.registry import (
 )
 from platform_agent_orchestrator.runtime.context import ExecutionContextFactory
 from platform_agent_orchestrator.runtime.dispatcher import Dispatcher
+from platform_agent_orchestrator.runtime.langgraph import LangGraphWorkflowRuntime
 from platform_agent_orchestrator.runtime.legacy_adapter import (
     LegacyWorkflowRuntime,
+    TransitionalWorkflowRuntime,
     register_legacy_alert,
 )
 from platform_agent_orchestrator.sdk.plugin import PluginContext
@@ -86,8 +89,11 @@ class RuntimeDependencies:
     ) -> Dispatcher:
         """Compose registry routing with a runtime hidden behind WorkflowRuntime."""
 
-        runtime = LegacyWorkflowRuntime(
-            self.registry(checkpointer=checkpointer, services=services)
+        runtime = TransitionalWorkflowRuntime(
+            primary=LangGraphWorkflowRuntime(checkpointer=checkpointer),
+            legacy=LegacyWorkflowRuntime(
+                self.registry(checkpointer=checkpointer, services=services)
+            ),
         )
         return Dispatcher(
             flows=self.flows,
@@ -109,12 +115,14 @@ def build_dependencies(
     application_settings = settings or ApplicationSettings.from_env(environ)
     if application_settings.adapter_mode != "demo":
         raise ValueError(f"unsupported adapter mode: {application_settings.adapter_mode}")
-    services = DemoPlatformServices().as_services()
+    demo = DemoPlatformServices()
+    services = demo.as_services()
     observability_settings = ObservabilitySettings.from_env(environ)
     observability = build_observability(observability_settings)
     flows = FlowRegistry()
     agents = AgentRegistry()
     capabilities = CapabilityRegistry()
+    capabilities.register(DemoCapabilityProvider(demo.knowledge))
     policies = _PolicyExtensions()
     register_builtin_plugins(
         PluginContext(

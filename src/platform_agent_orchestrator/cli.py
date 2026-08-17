@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
+from datetime import UTC, datetime
 from typing import Any
+from uuid import uuid4
 
 from platform_agent_orchestrator.bootstrap import build_dependencies
 from platform_agent_orchestrator.contracts import (
@@ -13,9 +16,10 @@ from platform_agent_orchestrator.contracts import (
     EventEnvelopeV1,
     EventType,
 )
+from platform_agent_orchestrator.core import DomainEvent as V2DomainEvent
 
 
-def sample_events() -> dict[str, DomainEvent]:
+def sample_events() -> dict[str, DomainEvent | V2DomainEvent]:
     return {
         "alert": EventEnvelopeV1(
             source="sentry",
@@ -58,12 +62,15 @@ def sample_events() -> dict[str, DomainEvent]:
                 "operation": "inspect",
             },
         ),
-        "engineering": DomainEvent.from_legacy(
-            type=EventType.ENGINEERING_QUESTION,
+        "engineering": V2DomainEvent(
+            id=str(uuid4()),
+            type="engineering.question.received",
             source="code-atlas",
             subject="question-1",
+            occurred_at=datetime.now(UTC),
+            correlation_id=str(uuid4()),
             idempotency_key="code-atlas:question-1",
-            payload={
+            data={
                 "question": "Which regression tests cover a payment timeout change?",
                 "role": "auto",
             },
@@ -72,7 +79,7 @@ def sample_events() -> dict[str, DomainEvent]:
 
 
 def compact_result(result: dict[str, Any]) -> dict[str, Any]:
-    hidden = {"event", "evidence", "artifacts"}
+    hidden = {"event", "evidence", "memories", "artifacts"}
     return {key: value for key, value in result.items() if key not in hidden}
 
 
@@ -83,7 +90,21 @@ def run_demo(selection: str) -> int:
         events = sample_events()
         names = list(events) if selection == "all" else [selection]
         for name in names:
-            result = registry.invoke(name, events[name])
+            if name == "engineering":
+                engineering_event = events[name]
+                if not isinstance(engineering_event, V2DomainEvent):
+                    raise TypeError("engineering demo requires a v2 domain event")
+                dispatched = asyncio.run(
+                    dependencies.dispatcher().dispatch(engineering_event)
+                )
+                if len(dispatched) != 1:
+                    raise RuntimeError("engineering demo must resolve exactly one flow")
+                result = dispatched[0].output
+            else:
+                legacy_event = events[name]
+                if not isinstance(legacy_event, DomainEvent):
+                    raise TypeError("legacy demo requires a legacy domain event")
+                result = registry.invoke(name, legacy_event)
             print(f"\n=== {name} ===")
             print(json.dumps(compact_result(result), indent=2, default=str))
         return 0

@@ -101,7 +101,9 @@ def test_bootstrap_builds_demo_dependencies_without_secret_graph_state() -> None
     assert secret not in str(result)
     assert dependencies.settings.public_summary()["adapter_mode"] == "demo"
     assert dependencies.flows.get("alert").metadata.version == "1"
-    assert dependencies.capabilities.names() == frozenset()
+    assert dependencies.capabilities.names() == frozenset(
+        {"knowledge.search", "memory.recall"}
+    )
 
 
 def test_bootstrap_rejects_conflicting_configuration_sources() -> None:

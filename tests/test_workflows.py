@@ -82,22 +82,6 @@ def test_refresh_extracts_three_surfaces_and_publishes_one_snapshot() -> None:
     assert len(demo.publisher.publications) == 1
 
 
-def test_engineering_question_routes_to_qa_and_verifies_evidence() -> None:
-    demo = DemoPlatformServices()
-    registry = WorkflowRegistry(demo.as_services())
-    question = event(
-        EventType.ENGINEERING_QUESTION,
-        "question-1",
-        {"question": "What regression test coverage is needed?", "role": "auto"},
-    )
-
-    result = registry.invoke("engineering", question)
-
-    assert result["role"] == "qa"
-    assert result["status"] == "answered"
-    assert result["evidence_verified"] is True
-
-
 def test_safe_sre_action_executes_without_interrupt() -> None:
     demo = DemoPlatformServices()
     registry = WorkflowRegistry(demo.as_services())

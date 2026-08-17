@@ -22,10 +22,6 @@ class KnowledgePort(Protocol):
 class ReasoningPort(Protocol):
     def assess_alert(self, alert: dict[str, Any], evidence: list[EvidenceRef]) -> AgentDecision: ...
 
-    def answer_engineering(
-        self, role: str, question: str, evidence: list[EvidenceRef]
-    ) -> AgentDecision: ...
-
     def plan_sre(
         self, ticket: dict[str, Any], evidence: list[EvidenceRef]
     ) -> list[ActionRequest]: ...

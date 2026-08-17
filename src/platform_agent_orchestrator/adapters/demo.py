@@ -80,22 +80,6 @@ class DemoReasoner:
             evidence_ids=[item.id for item in evidence],
         )
 
-    def answer_engineering(
-        self, role: str, question: str, evidence: list[EvidenceRef]
-    ) -> AgentDecision:
-        guidance = {
-            "developer": "Update the payment client and preserve the existing timeout boundary.",
-            "qa": "Cover checkout success, dependency timeout, retry, and degraded-mode paths.",
-            "product": "The change can affect checkout completion and payment availability.",
-        }
-        return AgentDecision(
-            status=DecisionStatus.PROCEED,
-            summary=guidance[role],
-            confidence=0.9,
-            reasons=[f"Answered as the {role} view", f"Question: {question}"],
-            evidence_ids=[item.id for item in evidence],
-        )
-
     def plan_sre(self, ticket: dict[str, Any], evidence: list[EvidenceRef]) -> list[ActionRequest]:
         target = str(ticket.get("service", "unknown-service"))
         operation = str(ticket.get("operation", "inspect"))

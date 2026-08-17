@@ -22,8 +22,8 @@ class FlowRegistrar(Protocol):
 class AgentRegistrar(Protocol):
     """Minimal agent registry surface exposed to plugins."""
 
-    def register(self, name: str, agent: Agent) -> None:
-        """Register an agent under a unique name."""
+    def register(self, agent: Agent) -> None:
+        """Register an agent under its canonical ``agent.name``."""
 
         ...
 

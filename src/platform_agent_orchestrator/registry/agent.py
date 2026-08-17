@@ -18,9 +18,12 @@ class AgentRegistry:
     def __init__(self) -> None:
         self._agents: dict[str, Agent] = {}
 
-    def register(self, name: str, agent: Agent) -> None:
-        """Register an agent and fail fast on duplicate names."""
+    def register(self, agent: Agent) -> None:
+        """Register under ``agent.name``, the sole canonical agent identity."""
 
+        name = agent.name
+        if not name or name != name.strip():
+            raise ValueError("agent.name must be non-empty and unpadded")
         if name in self._agents:
             raise DuplicateRegistrationError("agent", name)
         self._agents[name] = agent

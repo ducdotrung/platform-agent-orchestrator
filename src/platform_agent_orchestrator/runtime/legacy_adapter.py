@@ -11,6 +11,7 @@ from platform_agent_orchestrator.contracts import EventType
 from platform_agent_orchestrator.core.context import ExecutionContext
 from platform_agent_orchestrator.core.events import DomainEvent
 from platform_agent_orchestrator.registry.legacy import WorkflowRegistry
+from platform_agent_orchestrator.runtime.engine import WorkflowRuntime
 from platform_agent_orchestrator.runtime.execution import RunResult, RunStatus
 from platform_agent_orchestrator.sdk.flow import BaseFlow, Flow, FlowDefinition, FlowMetadata
 from platform_agent_orchestrator.sdk.nodes import PauseRequest
@@ -80,6 +81,45 @@ class LegacyWorkflowRuntime:
         except Exception as error:
             return _failed(flow, run_id, error)
         return _translate_result(flow, run_id, result)
+
+
+class TransitionalWorkflowRuntime:
+    """Route migrated flows to the v2 runtime and deferred flows to legacy."""
+
+    def __init__(
+        self,
+        *,
+        primary: WorkflowRuntime,
+        legacy: LegacyWorkflowRuntime,
+    ) -> None:
+        self._primary = primary
+        self._legacy = legacy
+
+    async def start(
+        self,
+        flow: Flow,
+        event: DomainEvent,
+        *,
+        context: ExecutionContext,
+    ) -> RunResult:
+        runtime = self._legacy if isinstance(flow, LegacyFlowHandle) else self._primary
+        return await runtime.start(flow, event, context=context)
+
+    async def resume(
+        self,
+        run_id: str,
+        payload: dict[str, Any],
+        *,
+        context: ExecutionContext,
+        flow: Flow | None = None,
+    ) -> RunResult:
+        runtime = self._legacy if isinstance(flow, LegacyFlowHandle) else self._primary
+        return await runtime.resume(
+            run_id,
+            payload,
+            context=context,
+            flow=flow,
+        )
 
 
 def register_legacy_alert(flows: FlowRegistrar) -> None:
