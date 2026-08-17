@@ -18,6 +18,7 @@ from platform_agent_orchestrator.core import (
     DomainEvent,
     ExecutionContext,
     ExecutionIdentity,
+    MemoryRecord,
 )
 from platform_agent_orchestrator.plugins.builtin.sre import SREFlow, plugin
 from platform_agent_orchestrator.plugins.builtin.sre.flow import _approval
@@ -123,8 +124,9 @@ class RecordingSRECapabilities:
                 return CapabilityResult(success=False, error="notification conflict")
             return CapabilityResult(success=True, data={"receipt": f"notification:{key}"})
         if request.capability == "memory.record":
-            key = str(request.arguments["idempotency_key"])
-            self.memory_records.setdefault(key, dict(request.arguments))
+            record = MemoryRecord.model_validate(request.arguments)
+            key = record.idempotency_key
+            self.memory_records.setdefault(key, record.model_dump(mode="json"))
             return CapabilityResult(success=True, data={"receipt": f"memory:{key}"})
         return CapabilityResult(success=False, error="unsupported test capability")
 
@@ -367,7 +369,10 @@ def test_notification_is_idempotent_audit_and_memory_follows_known_outcome() -> 
     }
     assert len(provider.memory_records) == 1
     memory = provider.memory_records["sre:audit-success:sre-memory"]
-    assert memory["content"]["outcome"]["status"] == "completed"
+    assert memory["metadata"]["outcome"]["status"] == "completed"
+    assert memory["scope"] == "sre/orders/prod"
+    assert isinstance(memory["content"], str)
+    assert memory["metadata"]["kind"] == "operational_outcome"
     assert provider.timeline.index("infra.verify") < provider.timeline.index(
         "notification.send"
     )

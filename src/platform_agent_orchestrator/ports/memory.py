@@ -1,21 +1,36 @@
-"""Cross-boundary memory item model used by agent requests.
-
-The complete provider-neutral MemoryPort is introduced in Task 13.
-"""
+"""Typed provider-neutral memory integration port."""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, Field
+from platform_agent_orchestrator.core.context import ExecutionContext
+from platform_agent_orchestrator.core.memory import MemoryItem, MemoryQuery, MemoryRecord
 
 
-class MemoryItem(BaseModel):
-    """A bounded memory recalled from any configured memory provider."""
+@runtime_checkable
+class MemoryPort(Protocol):
+    """Recall and selectively update execution learnings."""
 
-    model_config = ConfigDict(extra="forbid")
+    async def recall(
+        self,
+        query: MemoryQuery,
+        *,
+        context: ExecutionContext,
+    ) -> list[MemoryItem]: ...
 
-    id: str = Field(min_length=1)
-    content: str = Field(min_length=1)
-    score: float | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    async def record(
+        self,
+        record: MemoryRecord,
+        *,
+        context: ExecutionContext,
+    ) -> str: ...
+
+    async def feedback(
+        self,
+        memory_id: str,
+        *,
+        useful: bool,
+        reason: str | None,
+        context: ExecutionContext,
+    ) -> None: ...

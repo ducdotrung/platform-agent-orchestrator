@@ -20,6 +20,7 @@ from platform_agent_orchestrator.core import (
     DomainEvent,
     EvidenceRef,
     ExecutionContext,
+    MemoryRecord,
 )
 from platform_agent_orchestrator.plugins.builtin.alert import AlertFlow, plugin
 from platform_agent_orchestrator.registry import (
@@ -142,8 +143,9 @@ class RecordingAlertCapabilities:
                 data={"receipt": f"notification:{key}"},
             )
         if request.capability == "memory.record" and self.include_record:
-            key = str(request.arguments["idempotency_key"])
-            self.memory_records.setdefault(key, dict(request.arguments))
+            record = MemoryRecord.model_validate(request.arguments)
+            key = record.idempotency_key
+            self.memory_records.setdefault(key, record.model_dump(mode="json"))
             return CapabilityResult(success=True, data={"receipt": f"memory:{key}"})
         return CapabilityResult(success=False, error="unsupported test capability")
 
@@ -328,6 +330,10 @@ def test_memory_write_is_selective_and_idempotent() -> None:
     assert repeated.output["memory_recorded"] is True
     assert len(provider.memory_records) == 1
     assert set(provider.memory_records) == {"sre-alert:alert-important:memory"}
+    memory = provider.memory_records["sre-alert:alert-important:memory"]
+    assert memory["scope"] == "alert/order-service"
+    assert memory["content"] == "Checkout depends on the affected payment path"
+    assert memory["metadata"]["kind"] == "incident_learning"
 
 
 def test_plugin_registration_and_dependency_boundary() -> None:

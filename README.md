@@ -119,6 +119,7 @@ knowledge.search
 knowledge.publish
 memory.recall
 memory.record
+memory.feedback
 notification.send
 alert.classify
 ```
@@ -174,6 +175,7 @@ Workflows may request capabilities such as:
 ```text
 memory.recall
 memory.record
+memory.feedback
 ```
 
 but should not depend directly on a particular memory database.

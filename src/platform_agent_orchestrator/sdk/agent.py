@@ -7,8 +7,8 @@ from typing import Any, Protocol
 from pydantic import BaseModel, ConfigDict, Field
 
 from platform_agent_orchestrator.core.context import ExecutionContext
+from platform_agent_orchestrator.core.memory import MemoryItem
 from platform_agent_orchestrator.core.models import EvidenceRef
-from platform_agent_orchestrator.ports.memory import MemoryItem
 
 
 class AgentRequest(BaseModel):

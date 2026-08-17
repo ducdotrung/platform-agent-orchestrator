@@ -22,6 +22,7 @@ from .errors import (
     UnknownFlowError,
 )
 from .events import DomainEvent
+from .memory import MemoryItem, MemoryQuery, MemoryRecord
 from .models import EvidenceRef, KnowledgeArtifact
 
 __all__ = [
@@ -42,6 +43,9 @@ __all__ = [
     "ExecutionIdentity",
     "FlowCompatibilityError",
     "KnowledgeArtifact",
+    "MemoryItem",
+    "MemoryQuery",
+    "MemoryRecord",
     "MissingCapabilityError",
     "OrchestratorError",
     "RiskLevel",

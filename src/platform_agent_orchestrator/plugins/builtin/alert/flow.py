@@ -6,8 +6,8 @@ from typing import Any, Protocol, TypedDict, cast
 
 from platform_agent_orchestrator.core.capabilities import CapabilityRequest, CapabilityResult
 from platform_agent_orchestrator.core.context import ExecutionContext
+from platform_agent_orchestrator.core.memory import MemoryItem
 from platform_agent_orchestrator.core.models import EvidenceRef
-from platform_agent_orchestrator.ports.memory import MemoryItem
 from platform_agent_orchestrator.sdk.flow import (
     FLOW_END,
     BaseFlow,
@@ -208,7 +208,7 @@ async def _recall_memory(state: dict[str, Any], node: NodeContext) -> dict[str, 
             operation="recall",
             arguments={
                 "query": f"{alert['service']} {alert['title']}",
-                "role": "alert",
+                "scope": f"alert/{alert['service']}",
                 "limit": 5,
             },
         ),
@@ -359,11 +359,17 @@ async def _record_memory(state: dict[str, Any], node: NodeContext) -> dict[str, 
             capability="memory.record",
             operation="record",
             arguments={
+                "content": state["impact"]["summary"],
                 "idempotency_key": f"{event['idempotency_key']}:memory",
-                "subject": state["alert"]["service"],
-                "revision": str(event.get("id", "unknown")),
-                "snapshot_id": state["notification_receipt"],
-                "summary": state["impact"]["summary"],
+                "scope": f"alert/{state['alert']['service']}",
+                "metadata": {
+                    "kind": "incident_learning",
+                    "alert_id": state["alert"]["id"],
+                    "service": state["alert"]["service"],
+                    "priority": state["classification"].get("priority"),
+                    "event_id": event["id"],
+                    "notification_receipt": state["notification_receipt"],
+                },
             },
         ),
         context=node.execution,

@@ -14,6 +14,7 @@ from platform_agent_orchestrator.core import (
     CapabilityResult,
     ExecutionContext,
     ExecutionIdentity,
+    MemoryItem,
     RiskLevel,
     compute_action_hash,
     validate_approval_binding,
@@ -237,7 +238,7 @@ async def _recall_memory(state: dict[str, Any], node: NodeContext) -> dict[str, 
             operation="recall",
             arguments={
                 "query": f"{ticket['service']} {ticket['environment']} {ticket['operation']}",
-                "role": "sre",
+                "scope": f"sre/{ticket['service']}/{ticket['environment']}",
                 "limit": 5,
             },
         ),
@@ -248,8 +249,9 @@ async def _recall_memory(state: dict[str, Any], node: NodeContext) -> dict[str, 
     raw = result.data.get("memories", []) if isinstance(result.data, dict) else []
     if not isinstance(raw, list):
         raise TypeError("memory.recall memories must be a list")
+    memories = [MemoryItem.model_validate(item) for item in raw]
     return {
-        "memories": [dict(item) for item in raw if isinstance(item, dict)],
+        "memories": [item.model_dump(mode="json") for item in memories],
         "memory_available": True,
     }
 
@@ -571,16 +573,28 @@ async def _record_memory(state: dict[str, Any], node: NodeContext) -> dict[str, 
             capability="memory.record",
             operation="record",
             arguments={
-                "subject": state["ticket"]["key"],
-                "revision": state["event"]["id"],
-                "snapshot_id": state["action_hash"],
-                "content": {
+                "content": (
+                    f"{state['ticket']['operation']} on {state['ticket']['service']} "
+                    f"finished with {state['outcome']['status']}: "
+                    f"{state['outcome']['detail']}"
+                ),
+                "idempotency_key": (
+                    f"{state['event']['idempotency_key']}:sre-memory"
+                ),
+                "scope": (
+                    f"sre/{state['ticket']['service']}/"
+                    f"{state['ticket']['environment']}"
+                ),
+                "metadata": {
+                    "kind": "operational_outcome",
+                    "ticket_key": state["ticket"]["key"],
+                    "event_id": state["event"]["id"],
+                    "action_hash": state["action_hash"],
                     "service": state["ticket"]["service"],
                     "environment": state["ticket"]["environment"],
                     "operation": state["ticket"]["operation"],
                     "outcome": state["outcome"],
                 },
-                "idempotency_key": f"{state['event']['idempotency_key']}:sre-memory",
             },
         ),
         context=node.execution,

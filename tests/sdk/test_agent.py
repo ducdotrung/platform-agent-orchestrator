@@ -3,8 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from platform_agent_orchestrator.core import EvidenceRef
-from platform_agent_orchestrator.ports import MemoryItem
+from platform_agent_orchestrator.core import EvidenceRef, MemoryItem
 from platform_agent_orchestrator.sdk import AgentRequest, AgentResult
 
 

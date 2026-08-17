@@ -16,7 +16,11 @@ FORBIDDEN_PUBLIC_TYPES = {
     "END",
     "StateGraph",
 }
-FORBIDDEN_IMPLEMENTATION_PREFIXES = {"platform_agent_orchestrator.registry"}
+FORBIDDEN_IMPLEMENTATION_PREFIXES = {
+    "platform_agent_orchestrator.adapters",
+    "platform_agent_orchestrator.ports",
+    "platform_agent_orchestrator.registry",
+}
 
 
 def imported_root(node: ast.Import | ast.ImportFrom) -> set[str]:
@@ -69,14 +73,12 @@ def test_contract_and_policy_layers_do_not_expose_runtime_specific_types() -> No
                         part for part in FORBIDDEN_PUBLIC_TYPES if part in ast.unparse(annotation)
                     }
                     for public_type in sorted(exposed):
-                        violations.append(
-                            f"{path.relative_to(ROOT)}:{node.lineno}: {public_type}"
-                        )
+                        violations.append(f"{path.relative_to(ROOT)}:{node.lineno}: {public_type}")
 
     assert violations == [], "runtime-specific public types:\n" + "\n".join(violations)
 
 
-def test_contract_and_policy_layers_do_not_import_registry_implementations() -> None:
+def test_contract_and_policy_layers_do_not_import_implementation_layers() -> None:
     violations: list[str] = []
 
     for target in TARGETS:
@@ -92,4 +94,6 @@ def test_contract_and_policy_layers_do_not_import_registry_implementations() -> 
                     ):
                         violations.append(f"{path.relative_to(ROOT)}:{node.lineno}: {module}")
 
-    assert violations == [], "implementation imports in core/sdk:\n" + "\n".join(violations)
+    assert violations == [], "implementation imports in contract/policy layers:\n" + "\n".join(
+        violations
+    )

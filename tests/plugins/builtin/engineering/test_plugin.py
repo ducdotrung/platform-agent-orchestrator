@@ -228,6 +228,12 @@ def test_registered_agent_is_invoked_with_knowledge_and_memory() -> None:
     assert len(agent.requests) == 1
     assert agent.requests[0].evidence[0].locator == "service://checkout/payment"
     assert agent.requests[0].memories[0].id == "memory-1"
+    memory_request = provider.requests[1]
+    assert memory_request.arguments == {
+        "query": "How should I change the client?",
+        "scope": "engineering/developer",
+        "limit": 5,
+    }
     assert [request.capability for request in provider.requests] == [
         "knowledge.search",
         "memory.recall",

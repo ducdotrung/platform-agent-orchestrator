@@ -16,6 +16,8 @@ from platform_agent_orchestrator.contracts import (
     KnowledgeArtifact,
 )
 
+from .demo_memory import DemoMemory
+
 
 def stable_id(*parts: str) -> str:
     joined = "|".join(parts).encode()
@@ -252,6 +254,7 @@ class DemoActions:
 @dataclass
 class DemoAdapters:
     knowledge: DemoKnowledge = field(default_factory=DemoKnowledge)
+    memory: DemoMemory = field(default_factory=DemoMemory)
     alert_classifier: DemoAlertClassifier = field(default_factory=DemoAlertClassifier)
     reasoner: DemoReasoner = field(default_factory=DemoReasoner)
     extractor: DemoExtractor = field(default_factory=DemoExtractor)

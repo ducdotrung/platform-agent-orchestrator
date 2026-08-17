@@ -264,13 +264,22 @@ async def _record_memory(state: dict[str, Any], node: NodeContext) -> dict[str, 
             capability="memory.record",
             operation="record",
             arguments={
+                "content": (
+                    f"Knowledge refresh published for {state['subject']} "
+                    f"at revision {state['revision']}"
+                ),
                 "idempotency_key": f"{state['publication_key']}:memory",
-                "subject": state["subject"],
-                "revision": state["revision"],
-                "snapshot_id": state["snapshot_id"],
-                "artifacts": [
-                    {"id": artifact.id, "kind": artifact.kind} for artifact in artifacts
-                ],
+                "scope": f"knowledge/{state['subject']}",
+                "metadata": {
+                    "kind": "knowledge_refresh",
+                    "subject": state["subject"],
+                    "revision": state["revision"],
+                    "snapshot_id": state["snapshot_id"],
+                    "artifacts": [
+                        {"id": artifact.id, "kind": artifact.kind}
+                        for artifact in artifacts
+                    ],
+                },
             },
         ),
         context=node.execution,

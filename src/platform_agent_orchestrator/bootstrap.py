@@ -12,6 +12,7 @@ from platform_agent_orchestrator.adapters.demo_capabilities import (
     DemoKnowledgeRefreshCapabilityProvider,
     DemoSRECapabilityProvider,
 )
+from platform_agent_orchestrator.adapters.memory import MemoryCapabilityProvider
 from platform_agent_orchestrator.adapters.ports import NotificationPort
 from platform_agent_orchestrator.observability import (
     ObservabilityBackend,
@@ -97,6 +98,7 @@ def build_dependencies(
     agents = AgentRegistry()
     capabilities = CapabilityRegistry()
     capabilities.register(DemoCapabilityProvider(demo_adapters.knowledge))
+    capabilities.register(MemoryCapabilityProvider(demo_adapters.memory))
     capabilities.register(
         DemoAlertCapabilityProvider(
             demo_adapters.alert_classifier,

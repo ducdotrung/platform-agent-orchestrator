@@ -18,6 +18,7 @@ from platform_agent_orchestrator.core import (
     EvidenceRef,
     ExecutionContext,
     KnowledgeArtifact,
+    MemoryRecord,
 )
 from platform_agent_orchestrator.plugins.builtin.knowledge_refresh import (
     KnowledgeRefreshFlow,
@@ -84,8 +85,9 @@ class RecordingRefreshCapabilities:
         if request.capability == "knowledge.publish":
             return self._publish(request)
         if request.capability == "memory.record" and self.include_memory:
-            key = str(request.arguments["idempotency_key"])
-            self.memory_records.setdefault(key, dict(request.arguments))
+            record = MemoryRecord.model_validate(request.arguments)
+            key = record.idempotency_key
+            self.memory_records.setdefault(key, record.model_dump(mode="json"))
             return CapabilityResult(success=True, data={"receipt": f"memory:{key}"})
         return CapabilityResult(success=False, error="unsupported test capability")
 
@@ -293,6 +295,10 @@ def test_memory_record_is_selective_and_idempotent() -> None:
     assert trivial.output["memory_recorded"] is False
     assert significant.output["memory_recorded"] is True
     assert len(provider.memory_records) == 1
+    memory = next(iter(provider.memory_records.values()))
+    assert memory["scope"] == "knowledge/payment-service"
+    assert memory["metadata"]["kind"] == "knowledge_refresh"
+    assert len(memory["metadata"]["artifacts"]) == 3
 
 
 def test_plugin_registration_and_dependency_boundary() -> None:

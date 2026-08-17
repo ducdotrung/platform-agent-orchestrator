@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass, field
-from typing import Any
 
 from platform_agent_orchestrator.contracts import (
     ActionRequest as LegacyActionRequest,
@@ -34,7 +32,6 @@ from platform_agent_orchestrator.core.models import (
     EvidenceRef,
     KnowledgeArtifact,
 )
-from platform_agent_orchestrator.ports.memory import MemoryItem
 
 from .ports import (
     ActionPort,
@@ -49,14 +46,13 @@ from .ports import (
 
 @dataclass(frozen=True)
 class DemoCapabilityProvider:
-    """Expose demo search and memory behind namespaced capabilities."""
+    """Expose deterministic demo knowledge through a namespaced capability."""
 
     knowledge: KnowledgePort
-    recorded_memories: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     @property
     def capabilities(self) -> frozenset[str]:
-        return frozenset({"knowledge.search", "memory.recall", "memory.record"})
+        return frozenset({"knowledge.search"})
 
     async def invoke(
         self,
@@ -85,48 +81,6 @@ class DemoCapabilityProvider:
             return CapabilityResult(
                 success=True,
                 data={"evidence": [item.model_dump(mode="json") for item in evidence]},
-                metadata={"provider": "demo"},
-            )
-        if request.capability == "memory.recall":
-            query = str(request.arguments.get("query", "")).strip()
-            role = str(request.arguments.get("role", "engineering"))
-            memory = MemoryItem(
-                id="demo-engineering-memory",
-                content=(
-                    "Previous checkout changes required explicit dependency-timeout "
-                    "and degraded-mode regression coverage."
-                ),
-                score=0.9,
-                metadata={"query": query[:128], "role": role[:32]},
-            )
-            return CapabilityResult(
-                success=True,
-                data={"memories": [memory.model_dump(mode="json")]},
-                metadata={"provider": "demo"},
-            )
-        if request.capability == "memory.record":
-            idempotency_key = str(request.arguments.get("idempotency_key", "")).strip()
-            if not idempotency_key:
-                return CapabilityResult(
-                    success=False,
-                    error="memory.record requires an idempotency_key",
-                )
-            receipt = (
-                "demo-memory-"
-                + hashlib.sha256(idempotency_key.encode()).hexdigest()[:16]
-            )
-            self.recorded_memories.setdefault(
-                idempotency_key,
-                {
-                    "receipt": receipt,
-                    "subject": str(request.arguments.get("subject", ""))[:256],
-                    "revision": str(request.arguments.get("revision", ""))[:128],
-                    "snapshot_id": str(request.arguments.get("snapshot_id", ""))[:128],
-                },
-            )
-            return CapabilityResult(
-                success=True,
-                data={"receipt": receipt},
                 metadata={"provider": "demo"},
             )
         return CapabilityResult(

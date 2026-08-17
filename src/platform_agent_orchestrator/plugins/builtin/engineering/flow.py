@@ -9,8 +9,8 @@ from platform_agent_orchestrator.core.capabilities import (
     CapabilityResult,
 )
 from platform_agent_orchestrator.core.context import ExecutionContext
+from platform_agent_orchestrator.core.memory import MemoryItem
 from platform_agent_orchestrator.core.models import EvidenceRef
-from platform_agent_orchestrator.ports.memory import MemoryItem
 from platform_agent_orchestrator.sdk.agent import Agent, AgentRequest
 from platform_agent_orchestrator.sdk.flow import (
     FLOW_END,
@@ -159,7 +159,7 @@ async def _recall_memory(
             operation="recall",
             arguments={
                 "query": state["question"],
-                "role": state["role"],
+                "scope": f"engineering/{state['role']}",
                 "limit": 5,
             },
         ),
