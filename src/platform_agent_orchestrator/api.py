@@ -17,6 +17,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from platform_agent_orchestrator.bootstrap import RuntimeDependencies, build_dependencies
 from platform_agent_orchestrator.contracts import EventEnvelopeV1
+from platform_agent_orchestrator.core.events import DomainEvent
 from platform_agent_orchestrator.persistence import (
     ApprovalConflict,
     ApprovalExpired,
@@ -313,8 +314,37 @@ def create_app(
         repository: EventRepository | None = app.state.event_repository
         if repository is None:
             return _public_error(503, "persistence_unavailable", "Persistence is unavailable")
+        runtime_dependencies: RuntimeDependencies = app.state.dependencies
+        event = DomainEvent(
+            id=envelope.id,
+            type=envelope.type,
+            source=envelope.source,
+            subject=envelope.subject,
+            occurred_at=envelope.occurred_at,
+            correlation_id=envelope.correlation_id,
+            idempotency_key=envelope.idempotency_key,
+            tenant_id=authorization.scope_id,
+            data=envelope.payload.model_dump(mode="json"),
+        )
+        matching = tuple(
+            flow
+            for flow in runtime_dependencies.flows.resolve(event)
+            if flow.metadata.name == authorization.workflow
+        )
+        if len(matching) != 1:
+            return _public_error(
+                422,
+                "flow_resolution_failed",
+                "Authorized workflow does not resolve this event",
+            )
+        flow = matching[0]
         try:
-            result = await repository.admit_event(envelope, authorization)
+            result = await repository.admit_event(
+                envelope,
+                authorization,
+                flow_name=flow.metadata.name,
+                flow_version=flow.metadata.version,
+            )
         except IdempotencyConflict:
             return _public_error(
                 409,

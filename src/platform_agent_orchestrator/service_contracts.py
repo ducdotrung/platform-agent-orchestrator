@@ -222,8 +222,8 @@ class RunContractV1(PublicContract):
     event_id: str = Field(min_length=1, max_length=128)
     scope_id: str = Field(min_length=1, max_length=128)
     thread_id: str = Field(min_length=1, max_length=128)
-    workflow: Literal["alert"] = "alert"
-    workflow_contract_version: Literal["1"] = "1"
+    workflow: str = Field(default="alert", min_length=1, max_length=64)
+    workflow_contract_version: str = Field(default="1", min_length=1, max_length=64)
     status: RunStatus
     result_summary: str | None = Field(default=None, max_length=16_384)
     error: ErrorContractV1 | None = None

@@ -31,7 +31,8 @@ class WorkflowRuntime(Protocol):
         payload: dict[str, Any],
         *,
         context: ExecutionContext,
+        flow: Flow | None = None,
     ) -> RunResult:
-        """Resume a paused run with externally validated input."""
+        """Resume using a flow reconstructed from durable metadata when supplied."""
 
         ...

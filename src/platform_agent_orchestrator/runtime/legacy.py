@@ -153,12 +153,14 @@ async def run_worker(stop_event: asyncio.Event | None = None) -> None:
         with postgres_checkpointer(settings.checkpoint_database_url) as checkpointer:
             checkpointer.get({"configurable": {"thread_id": "worker-health"}})
             WORKER_READY_PATH.write_text("ready\n")
-            registry = dependencies.registry(checkpointer=checkpointer)
-            registry.services = services
+            flow_dispatcher = dependencies.dispatcher(
+                checkpointer=checkpointer,
+                services=services,
+            )
             worker = Worker(
                 worker_id="local-worker-1",
                 dispatcher=DatabaseJobDispatcher(repository),
-                executor=RegistryExecution(repository, registry),
+                executor=RegistryExecution(repository, flow_dispatcher),
                 outcomes=repository,
                 metrics=metrics,
                 event_logger=event_logger,

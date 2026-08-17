@@ -8,17 +8,18 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any, Protocol
+from typing import Protocol
 
 from platform_agent_orchestrator.dispatcher import DatabaseJobDispatcher, DispatcherClosed
 from platform_agent_orchestrator.persistence import ClaimedJob, EventRepository, LeaseLost
-from platform_agent_orchestrator.registry import WorkflowRegistry
+from platform_agent_orchestrator.runtime import RunResult, RunStatus
+from platform_agent_orchestrator.runtime.dispatcher import Dispatcher
 from platform_agent_orchestrator.service_contracts import RetryCategory
 from platform_agent_orchestrator.telemetry import PublicEventLogger, ServiceMetrics
 
 
 class WorkflowExecution(Protocol):
-    async def execute(self, claim: ClaimedJob) -> dict[str, Any]: ...
+    async def execute(self, claim: ClaimedJob) -> RunResult: ...
 
 
 class OutcomeStore(Protocol):
@@ -63,24 +64,15 @@ class TerminalWorkerError(RuntimeError):
 @dataclass(frozen=True)
 class RegistryExecution:
     repository: EventRepository
-    registry: WorkflowRegistry
+    dispatcher: Dispatcher
 
-    async def execute(self, claim: ClaimedJob) -> dict[str, Any]:
+    async def execute(self, claim: ClaimedJob) -> RunResult:
+        run = await self.repository.load_claimed_run(claim)
         if claim.kind == "resume":
             decision = await self.repository.load_claimed_resume(claim)
-            return await asyncio.to_thread(
-                self.registry.resume,
-                "alert",
-                thread_id=claim.run_id,
-                decision=decision,
-            )
+            return await self.dispatcher.resume(run, decision)
         event = await self.repository.load_claimed_event(claim)
-        return await asyncio.to_thread(
-            self.registry.invoke,
-            "alert",
-            event,
-            thread_id=claim.run_id,
-        )
+        return await self.dispatcher.execute(run, event)
 
 
 @dataclass
@@ -152,14 +144,27 @@ class Worker:
             self._observe("terminal_failure")
             return
 
+        if result.status not in {RunStatus.PAUSED, RunStatus.SUCCEEDED}:
+            category = RetryCategory.TERMINAL_DEPENDENCY
+            try:
+                await self.outcomes.record_terminal_failure(
+                    claim,
+                    category=category.value,
+                    fingerprint=_run_failure_fingerprint(result),
+                )
+            except LeaseLost:
+                pass
+            self._observe("terminal_failure", workflow=result.flow)
+            return
+
         summary = _bounded_summary(result, now=self.clock())
         try:
-            if "__interrupt__" in result:
+            if result.status is RunStatus.PAUSED:
                 await self.outcomes.record_interruption(claim, summary)
-                self._observe("interrupted")
-            else:
+                self._observe("interrupted", workflow=result.flow)
+            elif result.status is RunStatus.SUCCEEDED:
                 await self.outcomes.record_success(claim, summary)
-                self._observe("succeeded")
+                self._observe("succeeded", workflow=result.flow)
         except LeaseLost:
             self._observe("lease_lost")
 
@@ -167,12 +172,16 @@ class Worker:
         self._stopping.set()
         await self.dispatcher.shutdown()
 
-    def _observe(self, outcome: str) -> None:
+    def _observe(self, outcome: str, *, workflow: str = "unknown") -> None:
         try:
             if self.metrics is not None:
                 self.metrics.worker_outcomes.labels(outcome).inc()
             if self.event_logger is not None:
-                self.event_logger.info("worker_outcome", outcome=outcome, workflow="alert")
+                self.event_logger.info(
+                    "worker_outcome",
+                    outcome=outcome,
+                    workflow=workflow,
+                )
         except Exception:
             pass
 
@@ -182,13 +191,18 @@ def _error_fingerprint(category: RetryCategory, error: BaseException) -> bytes:
     return hashlib.sha256(identity.encode()).digest()
 
 
-def _bounded_summary(result: dict[str, Any], *, now: datetime | None = None) -> str:
+def _run_failure_fingerprint(result: RunResult) -> bytes:
+    identity = f"runtime_failed:{result.flow}:{result.status.value}"
+    return hashlib.sha256(identity.encode()).digest()
+
+
+def _bounded_summary(result: RunResult, *, now: datetime | None = None) -> str:
     summary = {
-        "status": result.get("status", "interrupted" if "__interrupt__" in result else "completed"),
-        "interrupted": "__interrupt__" in result,
+        "status": result.output.get("status", result.status.value),
+        "interrupted": result.status is RunStatus.PAUSED,
     }
-    if "__interrupt__" in result:
-        interrupt_value = _interrupt_value(result["__interrupt__"])
+    if result.pause is not None:
+        interrupt_value = result.pause.payload
         canonical = json.dumps(
             interrupt_value,
             ensure_ascii=False,
@@ -196,20 +210,15 @@ def _bounded_summary(result: dict[str, Any], *, now: datetime | None = None) -> 
             sort_keys=True,
         ).encode()
         decided_by = now or datetime.now(UTC)
+        action_hash = (
+            result.pause.approval.action_hash
+            if result.pause.approval is not None
+            else hashlib.sha256(canonical).hexdigest()
+        )
         summary["approval"] = {
             "approval_version": 1,
             "kind": str(interrupt_value.get("kind", "workflow_review"))[:64],
-            "action_hash": hashlib.sha256(canonical).hexdigest(),
+            "action_hash": action_hash,
             "expires_at": (decided_by + timedelta(minutes=15)).isoformat(),
         }
     return json.dumps(summary, separators=(",", ":"), sort_keys=True)
-
-
-def _interrupt_value(raw: Any) -> dict[str, Any]:
-    values = list(raw) if isinstance(raw, (list, tuple)) else [raw]
-    if len(values) != 1:
-        raise ValueError("exactly one workflow interrupt is supported")
-    value = getattr(values[0], "value", values[0])
-    if not isinstance(value, dict):
-        raise ValueError("workflow interrupt must contain an object")
-    return value

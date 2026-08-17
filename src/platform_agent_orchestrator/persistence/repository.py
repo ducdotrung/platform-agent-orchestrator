@@ -15,7 +15,9 @@ import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from platform_agent_orchestrator.contracts import DomainEvent, EventEnvelopeV1
+from platform_agent_orchestrator.contracts import EventEnvelopeV1
+from platform_agent_orchestrator.core.events import DomainEvent
+from platform_agent_orchestrator.runtime.execution import RunMetadata
 from platform_agent_orchestrator.security import AuthorizationContext
 from platform_agent_orchestrator.service_contracts import (
     ApprovalContractV1,
@@ -129,10 +131,20 @@ class EventRepository:
         self,
         envelope: EventEnvelopeV1,
         authorization: AuthorizationContext,
+        *,
+        flow_name: str | None = None,
+        flow_version: str = "1",
     ) -> AdmissionResult:
         fingerprint = event_fingerprint(envelope)
+        selected_flow = flow_name or authorization.workflow
         try:
-            result = await self._insert_admission(envelope, authorization, fingerprint)
+            result = await self._insert_admission(
+                envelope,
+                authorization,
+                fingerprint,
+                flow_name=selected_flow,
+                flow_version=flow_version,
+            )
         except IntegrityError as error:
             try:
                 result = await self._load_duplicate(envelope, authorization, fingerprint)
@@ -147,6 +159,9 @@ class EventRepository:
         envelope: EventEnvelopeV1,
         authorization: AuthorizationContext,
         fingerprint: bytes,
+        *,
+        flow_name: str,
+        flow_version: str,
     ) -> AdmissionResult:
         async with self._sessions() as session, session.begin():
             existing = await self._find_event(session, envelope, authorization.scope_id)
@@ -178,8 +193,8 @@ class EventRepository:
                 id=run_id,
                 scope_id=authorization.scope_id,
                 event_id=envelope.id,
-                workflow="alert",
-                workflow_contract_version="1",
+                workflow=flow_name,
+                workflow_contract_version=flow_version,
                 thread_id=run_id,
                 status=RunStatus.QUEUED.value,
             )
@@ -335,8 +350,64 @@ class EventRepository:
                 occurred_at=event.occurred_at,
                 correlation_id=event.correlation_id,
                 idempotency_key=event.idempotency_key,
-                payload=event.payload,
+                tenant_id=run.scope_id,
+                data=event.payload,
             )
+
+    async def load_claimed_run(self, claim: ClaimedJob) -> RunMetadata:
+        """Reconstruct runtime-neutral identity while enforcing the active lease."""
+
+        async with self._sessions() as session:
+            job = await session.scalar(
+                sa.select(DeliveryJobRecord).where(
+                    DeliveryJobRecord.id == claim.job_id,
+                    DeliveryJobRecord.run_id == claim.run_id,
+                    DeliveryJobRecord.status == DeliveryStatus.LEASED.value,
+                    DeliveryJobRecord.lease_token == claim.lease_token,
+                )
+            )
+            if job is None:
+                raise LeaseLost("delivery lease is no longer active")
+            run = await session.get(RunRecord, claim.run_id)
+            if run is None:
+                raise RuntimeError("claimed run is missing")
+            event = await session.get(EventRecord, run.event_id)
+            if event is None:
+                raise RuntimeError("claimed event is missing")
+            return self._run_metadata(run, event)
+
+    async def get_run_metadata(
+        self,
+        run_id: str,
+        tenant_id: str,
+    ) -> RunMetadata | None:
+        """Load durable resume identity without loading checkpoints or flow objects."""
+
+        async with self._sessions() as session:
+            run = await session.scalar(
+                sa.select(RunRecord).where(
+                    RunRecord.id == run_id,
+                    RunRecord.scope_id == tenant_id,
+                )
+            )
+            if run is None:
+                return None
+            event = await session.get(EventRecord, run.event_id)
+            if event is None:
+                raise RuntimeError("durable run event is missing")
+            return self._run_metadata(run, event)
+
+    @staticmethod
+    def _run_metadata(run: RunRecord, event: EventRecord) -> RunMetadata:
+        return RunMetadata(
+            run_id=run.id,
+            flow_name=run.workflow,
+            flow_version=run.workflow_contract_version,
+            thread_id=run.thread_id,
+            correlation_id=event.correlation_id,
+            tenant_id=run.scope_id,
+            status=run.status,
+        )
 
     async def load_claimed_resume(self, claim: ClaimedJob) -> dict[str, Any]:
         if claim.kind != "resume":

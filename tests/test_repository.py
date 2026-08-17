@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 from platform_agent_orchestrator.contracts import AlertReceivedPayloadV1, EventEnvelopeV1
+from platform_agent_orchestrator.dispatcher import DatabaseJobDispatcher
 from platform_agent_orchestrator.persistence import (
     DeliveryAttemptRecord,
     DeliveryJobRecord,
@@ -23,8 +24,15 @@ from platform_agent_orchestrator.persistence import (
     LeaseLost,
     RunRecord,
 )
+from platform_agent_orchestrator.registry import FlowRegistry
+from platform_agent_orchestrator.runtime import RunResult
+from platform_agent_orchestrator.runtime import RunStatus as RuntimeRunStatus
+from platform_agent_orchestrator.runtime.context import ExecutionContextFactory
+from platform_agent_orchestrator.runtime.dispatcher import Dispatcher
+from platform_agent_orchestrator.sdk import BaseFlow, FlowDefinition, FlowMetadata
 from platform_agent_orchestrator.security import AuthorizationContext
 from platform_agent_orchestrator.service_contracts import DeliveryStatus, RunStatus
+from platform_agent_orchestrator.worker import RegistryExecution, Worker
 
 ROOT = Path(__file__).resolve().parents[1]
 NOW = datetime(2026, 7, 30, 12, 0, tzinfo=UTC)
@@ -224,6 +232,120 @@ def test_success_transition_is_atomic_and_fenced(tmp_path: Path) -> None:
 
             with pytest.raises(LeaseLost):
                 await repository.record_success(claim, "duplicate")
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_durable_run_metadata_reconstructs_flow_and_execution_identity(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        repository, engine, _sessions = await repository_for(tmp_path)
+        try:
+            accepted = envelope()
+            admission = await repository.admit_event(
+                accepted,
+                authorization(),
+                flow_name="customer.alert",
+                flow_version="2.4.0",
+            )
+            claim = (await repository.claim_jobs("metadata-worker"))[0]
+
+            claimed = await repository.load_claimed_run(claim)
+            reloaded = await repository.get_run_metadata(
+                admission.run_id,
+                authorization().scope_id,
+            )
+
+            assert claimed == reloaded
+            assert claimed.flow_name == "customer.alert"
+            assert claimed.flow_version == "2.4.0"
+            assert claimed.thread_id == admission.run_id
+            assert claimed.correlation_id == accepted.correlation_id
+            assert claimed.tenant_id == authorization().scope_id
+            assert claimed.status == RunStatus.RUNNING.value
+            assert set(claimed.model_dump()) == {
+                "run_id",
+                "flow_name",
+                "flow_version",
+                "thread_id",
+                "correlation_id",
+                "tenant_id",
+                "status",
+            }
+            claimed.model_dump_json()
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_durable_outbox_worker_executes_registry_flow_through_runtime(
+    tmp_path: Path,
+) -> None:
+    class AlertFlow(BaseFlow):
+        metadata = FlowMetadata(
+            name="alert",
+            version="1",
+            event_types=frozenset({"alert.received"}),
+        )
+
+        def define(self) -> FlowDefinition:
+            return FlowDefinition(state_schema=dict, entrypoint="unused")
+
+    class Runtime:
+        def __init__(self) -> None:
+            self.contexts: list[object] = []
+
+        async def start(self, flow, event, *, context):
+            self.contexts.append(context)
+            return RunResult(
+                run_id=context.identity.run_id,
+                flow=flow.metadata.name,
+                status=RuntimeRunStatus.SUCCEEDED,
+                output={"status": "completed"},
+            )
+
+        async def resume(self, run_id, payload, *, context, flow=None):
+            raise AssertionError("resume was not expected")
+
+    async def scenario() -> None:
+        repository, engine, _sessions = await repository_for(tmp_path)
+        try:
+            accepted = envelope()
+            admission = await repository.admit_event(accepted, authorization())
+            flows = FlowRegistry()
+            flows.register(AlertFlow())
+            runtime = Runtime()
+            flow_dispatcher = Dispatcher(
+                flows=flows,
+                runtime=runtime,
+                contexts=ExecutionContextFactory(
+                    capabilities=object(),
+                    agents=object(),
+                    policy=object(),
+                    observability=object(),
+                ),
+            )
+            worker = Worker(
+                worker_id="integration-worker",
+                dispatcher=DatabaseJobDispatcher(repository),
+                executor=RegistryExecution(repository, flow_dispatcher),
+                outcomes=repository,
+                clock=lambda: NOW,
+            )
+
+            assert await worker.run_once() == 1
+            run = await repository.get_run(admission.run_id, authorization().scope_id)
+
+            assert run is not None and run.status is RunStatus.SUCCEEDED
+            assert len(runtime.contexts) == 1
+            identity = runtime.contexts[0].identity
+            assert identity.run_id == admission.run_id
+            assert identity.correlation_id == accepted.correlation_id
+            assert identity.tenant_id == authorization().scope_id
         finally:
             await engine.dispose()
 

@@ -89,16 +89,18 @@ def test_postgres_runtime_completes_durable_alert_and_approval_paths() -> None:
             claims = await repository.claim_jobs("postgres-test-worker", limit=32)
             claim = next(item for item in claims if item.run_id == admission.run_id)
             with postgres_checkpointer(checkpoint_url) as checkpointer:
-                registry = dependencies.registry(checkpointer=checkpointer)
-                registry.services = services
-                result = await RegistryExecution(repository, registry).execute(claim)
+                flow_dispatcher = dependencies.dispatcher(
+                    checkpointer=checkpointer,
+                    services=services,
+                )
+                result = await RegistryExecution(repository, flow_dispatcher).execute(claim)
             await repository.record_success(
                 claim,
-                json.dumps(result, separators=(",", ":"), sort_keys=True),
+                json.dumps(result.output, separators=(",", ":"), sort_keys=True),
             )
             run = await repository.get_run(admission.run_id, settings.scope_id)
 
-            assert result["status"] == "notified"
+            assert result.output["status"] == "notified"
             assert run is not None and run.status.value == "succeeded"
 
             approval_event = event.model_copy(

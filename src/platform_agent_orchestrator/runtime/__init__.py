@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from .engine import WorkflowRuntime
-from .execution import RunResult, RunStatus
+from .execution import RunMetadata, RunResult, RunStatus
 
 __all__ = [
+    "RunMetadata",
     "RunResult",
     "RunStatus",
     "WorkflowRuntime",

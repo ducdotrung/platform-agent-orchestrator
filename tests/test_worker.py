@@ -9,6 +9,8 @@ import pytest
 
 from platform_agent_orchestrator.dispatcher import DatabaseJobDispatcher
 from platform_agent_orchestrator.persistence import ClaimedJob
+from platform_agent_orchestrator.runtime import RunResult, RunStatus
+from platform_agent_orchestrator.sdk import PauseRequest
 from platform_agent_orchestrator.service_contracts import RetryCategory
 from platform_agent_orchestrator.worker import (
     RetryableWorkerError,
@@ -45,7 +47,7 @@ class FakeExecutor:
     def __init__(self, outcome: object) -> None:
         self.outcome = outcome
 
-    async def execute(self, claim: ClaimedJob) -> dict[str, Any]:
+    async def execute(self, claim: ClaimedJob) -> RunResult:
         if isinstance(self.outcome, BaseException):
             raise self.outcome
         return self.outcome  # type: ignore[return-value]
@@ -85,8 +87,26 @@ def run_worker(outcome: object) -> RecordingOutcomes:
 
 
 def test_worker_records_success_and_interruption() -> None:
-    success = run_worker({"status": "notified"})
-    interrupted = run_worker({"__interrupt__": [{"kind": "review"}]})
+    success = run_worker(
+        RunResult(
+            run_id="run-1",
+            flow="alert",
+            status=RunStatus.SUCCEEDED,
+            output={"status": "notified"},
+        )
+    )
+    interrupted = run_worker(
+        RunResult(
+            run_id="run-1",
+            flow="alert",
+            status=RunStatus.PAUSED,
+            pause=PauseRequest(
+                reason="review",
+                approval_id="approval-1",
+                payload={"kind": "review"},
+            ),
+        )
+    )
 
     assert success.calls[0][0] == "success"
     assert '"status":"notified"' in success.calls[0][1]["summary"]
@@ -129,7 +149,13 @@ def test_worker_shutdown_stops_future_claims() -> None:
         worker = Worker(
             worker_id="worker-1",
             dispatcher=DatabaseJobDispatcher(source),
-            executor=FakeExecutor({"status": "done"}),
+            executor=FakeExecutor(
+                RunResult(
+                    run_id="run-1",
+                    flow="alert",
+                    status=RunStatus.SUCCEEDED,
+                )
+            ),
             outcomes=RecordingOutcomes(),
         )
         await worker.shutdown()

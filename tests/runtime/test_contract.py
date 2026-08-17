@@ -4,7 +4,10 @@ import asyncio
 from typing import Any, TypedDict
 
 from platform_agent_orchestrator.runtime import RunStatus
-from platform_agent_orchestrator.runtime.langgraph import LangGraphWorkflowRuntime
+from platform_agent_orchestrator.runtime.langgraph import (
+    LangGraphCheckpoint,
+    LangGraphWorkflowRuntime,
+)
 from platform_agent_orchestrator.sdk import (
     FLOW_END,
     BaseFlow,
@@ -198,4 +201,45 @@ def test_pause_and_resume_translate_framework_outcome() -> None:
 
     assert resumed.status == RunStatus.SUCCEEDED
     assert resumed.output["prepared"] is True
+    assert resumed.output["approved"] is True
+
+
+def test_fresh_runtime_resumes_from_checkpoint_with_registry_resolved_flow() -> None:
+    def approval(state: dict[str, Any], node: NodeContext) -> NodeOutcome | dict[str, Any]:
+        if node.resume_payload is None:
+            return NodeOutcome(
+                pause=PauseRequest(
+                    reason="Durable restart review",
+                    approval_id="approval-restart",
+                )
+            )
+        return {"approved": node.resume_payload.get("approved") is True}
+
+    flow = ContractFlow(
+        "restart-resume",
+        FlowDefinition(
+            state_schema=RuntimeState,
+            entrypoint="approval",
+            nodes=[NodeSpec("approval", approval)],
+            edges=[EdgeSpec("approval", FLOW_END)],
+        ),
+    )
+    checkpoint = LangGraphCheckpoint()
+    execution_context = context("restart-run")
+    first_runtime = LangGraphWorkflowRuntime(checkpointer=checkpoint.saver)
+
+    paused = asyncio.run(first_runtime.start(flow, event(), context=execution_context))
+    assert paused.status is RunStatus.PAUSED
+
+    fresh_runtime = LangGraphWorkflowRuntime(checkpointer=checkpoint.saver)
+    resumed = asyncio.run(
+        fresh_runtime.resume(
+            "restart-run",
+            {"approved": True},
+            context=execution_context,
+            flow=flow,
+        )
+    )
+
+    assert resumed.status is RunStatus.SUCCEEDED
     assert resumed.output["approved"] is True
