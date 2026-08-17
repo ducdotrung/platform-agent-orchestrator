@@ -1,55 +1,407 @@
 # Platform Agent Orchestrator
 
-A runnable reference control plane for coordinating the existing SRE, service
-graph, Code Atlas, Jira, and alert capabilities without copying their domain
-logic into one repository.
+A runtime-neutral orchestration framework for building pluggable AI agent workflows.
 
-The current productization path is a public, local-only hackathon sample using
-synthetic alerts and Sock Shop microservice evidence. Its personas, baseline,
-and targets are illustrative; company adoption requires fresh discovery,
-measured baselines, security review, and approval.
+Platform Agent Orchestrator provides a small set of framework-owned contracts for composing agents, capabilities, policies, memory, human approval, and workflow runtimes without coupling application code to a specific agent framework or orchestration engine.
 
-The sample uses:
+LangGraph is currently supported as a runtime backend, but it is not part of the public workflow contract.
 
-- **LangGraph** for workflow state, routing, parallel work, checkpointing, and
-  human approval;
-- **LangChain** for optional tool-using role agents inside graph nodes;
-- **Langfuse** as an optional, redacted tracing and evaluation backend;
-- ports/adapters so GitNexus, Code Atlas, Sentry, Jira, Bitbucket, Teams, and
-  MCP integrations can remain independently deployed;
-- deterministic demo adapters, so the examples and tests do not need API keys.
+The repository also includes reference workflows for engineering assistance, knowledge refresh, alert analysis, and SRE automation. These are examples of how the framework can be used — they are not the scope of the framework itself.
 
-Runtime configuration defaults to the credential-free `demo` profile on
-loopback. See `.env.example` for validated settings. The opt-in `local` service
-profile refuses to start without its required PostgreSQL configuration, and
-external egress remains disabled in this public sample.
+> **Status:** active development. The project is currently a reference implementation and is not yet intended for production use.
+
+## Why
+
+Agent systems often start as a single graph or agent and gradually accumulate:
+
+- framework-specific workflow code;
+- direct integrations with external systems;
+- duplicated tool and capability definitions;
+- workflow-specific policy logic;
+- provider-specific memory implementations;
+- tightly coupled human-in-the-loop handling.
+
+That makes workflows difficult to reuse, test, replace, or distribute independently.
+
+Platform Agent Orchestrator separates these concerns.
+
+```text
+                    DomainEvent
+                         |
+                         v
+                +----------------+
+                |   Dispatcher   |
+                +----------------+
+                         |
+                         v
+                  Flow Registry
+                         |
+              +----------+----------+
+              |                     |
+              v                     v
+        FlowDefinition         FlowDefinition
+              |                     |
+              +----------+----------+
+                         |
+                         v
+                  WorkflowRuntime
+                         |
+               +---------+---------+
+               |                   |
+               v                   v
+          LangGraph            future runtime
+           adapter               adapters
+
+
+        Flows / Agents
+              |
+              v
+     Capability Registry
+              |
+     +--------+--------+--------+
+     |        |        |        |
+ knowledge  memory   actions  notifications
+     |        |        |        |
+     v        v        v        v
+ external providers / APIs / MCP / services
+```
+
+The framework owns the contracts.
+
+Plugins own workflow composition.
+
+Capability providers own integrations.
+
+Runtime adapters own orchestration-engine-specific behavior.
+
+## Design principles
+
+### Runtime-neutral workflows
+
+Application workflows are defined using framework-owned contracts such as:
+
+- `Flow`
+- `FlowDefinition`
+- `NodeSpec`
+- `EdgeSpec`
+- `JoinSpec`
+- `FLOW_END`
+- `PauseRequest`
+
+Flows do not expose LangGraph `StateGraph`, `CompiledGraph`, `Command`, `interrupt`, or other runtime-specific types.
+
+Runtime-specific translation belongs under `runtime/`.
+
+### Pluggable workflows
+
+Flows are registered dynamically instead of being hard-coded into the orchestrator.
+
+An event may match zero, one, or multiple flows.
+
+Plugins can contribute:
+
+- flows;
+- agents;
+- capabilities;
+- metadata;
+- permissions.
+
+The goal is for independently distributed Python packages to be able to extend the orchestrator without modifying its core.
+
+### Capability-based integrations
+
+Flows depend on capabilities rather than concrete integrations.
+
+For example:
+
+```text
+knowledge.search
+knowledge.publish
+memory.recall
+memory.record
+notification.send
+alert.classify
+```
+
+A flow does not need to know whether `knowledge.search` is implemented by a graph database, MCP server, REST API, local index, or another service.
+
+Providers can therefore be replaced without changing workflow definitions.
+
+### Provider-neutral agents
+
+Agents implement framework-owned request/response contracts.
+
+Flows resolve agents through the agent registry rather than constructing provider-specific agent implementations directly.
+
+This keeps LLM providers and agent libraries outside the workflow contract.
+
+### Policy before mutation
+
+External mutations are represented as `ActionIntent`.
+
+The intended execution path is:
+
+```text
+ActionIntent
+     |
+     v
+PolicyEngine
+     |
+     +---- deny
+     |
+     +---- allow -----------> execute
+     |
+     +---- require approval
+                |
+                v
+           PauseRequest
+                |
+          human decision
+                |
+                v
+              resume
+                |
+                v
+              execute
+```
+
+Approval is bound to the exact action, execution identity, and policy version so that an approval cannot silently authorize a modified action.
+
+### Memory is infrastructure, not workflow ownership
+
+Workflows may request capabilities such as:
+
+```text
+memory.recall
+memory.record
+```
+
+but should not depend directly on a particular memory database.
+
+Memory providers belong behind framework ports/capabilities and can be replaced independently.
+
+### Durable execution
+
+The service runtime supports durable event admission and execution metadata.
+
+Durable runs retain framework-level identity such as:
+
+```text
+run_id
+flow_name
+flow_version
+thread_id
+correlation_id
+tenant_id
+status
+```
+
+Runtime objects and compiled graphs are not application persistence contracts.
+
+This allows workflow execution infrastructure to evolve independently from application persistence.
 
 ## Architecture
 
+The main layers are:
+
 ```text
-Bitbucket / Jira / Sentry / user questions
-                    |
-                    v
-              DomainEvent
-                    |
-                    v
-       +---------------------------+
-       | LangGraph workflow registry|
-       +---------------------------+
-          |       |       |       |
-          v       v       v       v
-       refresh  alert    SRE   engineering
-          |       |       |       |
-          +-------+-------+-------+
-                    |
-        ports: knowledge, actions,
-        publication, notification
-                    |
-       existing repos / MCP / APIs
+platform_agent_orchestrator/
+├── core/                 # framework-owned domain contracts
+├── sdk/                  # public flow/agent/plugin SDK
+├── registry/             # flow, agent, capability registries
+├── policy/               # risk and approval policy
+├── runtime/
+│   └── langgraph/        # LangGraph runtime adapter
+├── plugins/
+│   └── builtin/          # reference workflow plugins
+├── adapters/             # integration implementations
+├── persistence/          # durable application state
+└── ...
 ```
 
-The repository deliberately does not own source cloning, graph extraction,
-alert policy files, infrastructure commands, or the wiki UI.
+The intended dependency direction is roughly:
+
+```text
+plugins
+   |
+   v
+SDK / Core
+   ^
+   |
+registries / runtime / adapters
+```
+
+Framework-neutral contracts must not depend on runtime implementations.
+
+## Reference workflows
+
+The repository currently includes several workflows that exercise different orchestration patterns.
+
+They are reference implementations, not framework requirements.
+
+### Engineering assistance
+
+Demonstrates:
+
+- agent registry;
+- role-based agent routing;
+- required and optional capabilities;
+- evidence-backed answers;
+- optional memory retrieval.
+
+Example roles include developer, QA, and business-analysis agents.
+
+### Knowledge refresh
+
+Demonstrates:
+
+- event-driven workflows;
+- parallel fan-out;
+- fan-in barriers;
+- provenance validation;
+- atomic publication;
+- idempotent side effects;
+- selective memory recording.
+
+A merged source-control event can trigger code, configuration, and documentation extraction concurrently before a revisioned knowledge snapshot is published.
+
+### Alert analysis
+
+Demonstrates the integration of domain-specific alert classification with shared knowledge, impact analysis, review, notification, and memory capabilities.
+
+Alert policy remains owned by the alert provider rather than being copied into the orchestrator.
+
+### SRE automation
+
+Demonstrates controlled mutation workflows:
+
+```text
+plan
+  ↓
+ActionIntent
+  ↓
+policy
+  ↓
+approval?
+  ↓
+execute
+  ↓
+verify
+```
+
+Infrastructure actions remain behind bounded capability providers rather than exposing arbitrary shell execution to workflows.
+
+## Runtime backends
+
+### LangGraph
+
+LangGraph is the first runtime backend.
+
+The adapter is responsible for translating framework semantics such as:
+
+```text
+FlowDefinition  -> StateGraph
+FLOW_END        -> LangGraph END
+PauseRequest    -> interrupt()
+resume payload  -> Command(resume=...)
+```
+
+This translation is intentionally isolated under:
+
+```text
+runtime/langgraph/
+```
+
+Plugins and public SDK contracts should not import LangGraph.
+
+The architecture is intended to allow additional runtime implementations in the future.
+
+## Plugin model
+
+A plugin can register flows, agents, and capabilities through the public SDK.
+
+Conceptually:
+
+```python
+class MyPlugin:
+    def register(self, context):
+        context.agents.register(...)
+        context.capabilities.register(...)
+        context.flows.register(...)
+```
+
+A workflow package should depend on capabilities rather than concrete infrastructure.
+
+For example:
+
+```text
+customer-support
+    |
+    +-- crm.customer.lookup
+    +-- knowledge.search
+    +-- ticket.create
+    +-- memory.recall
+    +-- notification.send
+```
+
+The orchestrator itself does not need customer-support-specific logic.
+
+The same model can be used for domains such as:
+
+- customer support;
+- security review;
+- incident response;
+- FinOps;
+- release management;
+- data analysis;
+- engineering assistance;
+- operations automation.
+
+## Adding an integration
+
+Implement a capability provider rather than importing an integration directly into a workflow.
+
+For example:
+
+```python
+class MyKnowledgeProvider:
+    @property
+    def capabilities(self):
+        return {"knowledge.search"}
+
+    async def invoke(self, request):
+        ...
+```
+
+Then register the provider with the capability registry.
+
+Flows can now request `knowledge.search` without knowing which implementation serves it.
+
+This pattern also applies to:
+
+```text
+memory.*
+notification.*
+scm.*
+ticket.*
+deployment.*
+infrastructure.*
+alert.*
+```
+
+## Human-in-the-loop
+
+Human approval is represented using framework-owned pause/resume contracts.
+
+Plugins do not call LangGraph `interrupt()` directly.
+
+Instead they return a framework `PauseRequest`.
+
+The active runtime translates that request into its own suspension mechanism.
+
+This allows approval semantics to remain stable even if the workflow runtime changes.
+
+External side effects should be idempotent because execution may be retried during recovery.
 
 ## Quick start
 
@@ -58,17 +410,15 @@ Python 3.11 or newer is required.
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
+
 pip install -e '.[dev]'
+
 python -m platform_agent_orchestrator demo all
+
 pytest
 ```
 
-To include Langfuse support, install `pip install -e '.[dev,observability]'`,
-copy the relevant values from `.env.example`, and set
-`PLATFORM_OBSERVABILITY=langfuse`. It is a no-op by default and requires no
-credentials for local demos.
-
-Individual demos:
+Individual reference workflows:
 
 ```bash
 python -m platform_agent_orchestrator demo alert
@@ -77,106 +427,145 @@ python -m platform_agent_orchestrator demo sre
 python -m platform_agent_orchestrator demo engineering
 ```
 
+The default demo profile uses deterministic local providers and does not require external API credentials.
+
 ## Local durable stack
 
-The public sample includes a loopback-only Compose stack with PostgreSQL,
-one-shot application/checkpoint migrations, the API, and one worker. Generate
-ignored local secrets before starting it:
+A loopback-only Compose stack is available for exercising durable admission, PostgreSQL persistence, checkpointing, API execution, and workers.
 
 ```bash
 python deploy/generate_secrets.py
+
 docker compose up --build --detach --wait api worker
+
 PYTHONPATH=src python deploy/smoke.py
 ```
 
-Inspect `/readyz` and `/metrics` on `127.0.0.1:8080`. Normal teardown preserves
-the database volume: `docker compose down`. Use `--volumes` only when you
-explicitly intend to delete disposable sample data. The worker uses local demo
-evidence and a receipt-only notifier; no company endpoint or mutation tool is
-enabled.
+Useful endpoints:
 
-The service factory is `platform_agent_orchestrator.api:create_app`. It exposes
-`/livez` for process liveness and `/readyz` for admission dependency readiness;
-these signals are intentionally independent.
+```text
+/livez
+/readyz
+/metrics
+```
 
-Event admission uses a signed-webhook security boundary with exact public-sample
-source, alert-workflow, Sock Shop service, and team-scope allow-lists. The demo
-profile has a process-local replay fence for tests only; local service mode
-fails readiness until the durable replay store is connected.
+Normal teardown preserves the database volume:
 
-With a repository and replay store connected, `POST /v1/events` returns a
-stable run ID and `GET /v1/runs/{run_id}` returns its bounded same-scope status.
-Only the versioned alert event maps to the `alert` workflow.
+```bash
+docker compose down
+```
 
-## Workflows
+Delete disposable data explicitly with:
 
-### Alert analysis
+```bash
+docker compose down --volumes
+```
 
-Normalizes an alert, applies deterministic suppression and priority rules,
-retrieves service knowledge, makes an impact decision, optionally pauses for
-review, creates a recommendation, and emits a deduplicated notification.
+## External systems
 
-### Knowledge refresh
+The orchestrator is intentionally not the owner of every domain implementation.
 
-Processes a merged-PR event, determines which knowledge surfaces changed,
-runs code/config/document extraction branches in parallel, validates
-provenance, and atomically publishes a revisioned snapshot.
+External systems may provide capabilities through APIs, MCP servers, Python adapters, or other transports.
 
-### SRE execution
+Examples used by the reference implementation include separate systems for:
 
-Builds a ticket plan, classifies its risk, pauses before risky execution,
-invokes a bounded action port, verifies the result, and records an audit
-notification.
+- service/code knowledge;
+- alert classification;
+- SRE actions;
+- documentation/wiki presentation;
+- memory storage.
 
-### Engineering assistance
+The orchestrator coordinates these capabilities but should not duplicate their domain logic.
 
-Routes developer, QA, and product/BA questions to role-specific reasoning over
-the same evidence-backed knowledge plane.
+## What belongs here?
 
-## Adding real integrations
+The orchestrator should own:
 
-Implement the protocols in `adapters/ports.py`. Recommended first adapters:
+```text
+workflow contracts
+plugin contracts
+agent contracts
+capability contracts
+registries
+dispatch
+runtime abstraction
+policy orchestration
+approval semantics
+execution identity
+durable workflow coordination
+```
 
-1. `ServiceGraphKnowledgePort`: call the read-only MCP server in
-   `service-graph-toolkit`.
-2. `AlertNotificationPort`: call the existing Teams sender in
-   `sre-alert-agent`.
-3. `KnowledgePublisherPort`: publish revisioned graph artifacts for Code Atlas.
-4. `SREActionPort`: expose allow-listed operations from `sre-skills`; never
-   expose arbitrary shell execution.
+Domain providers should own:
 
-Keep adapter credentials outside graph state. Graph checkpoints should contain
-identifiers and results, not tokens or full source corpora.
+```text
+alert classification rules
+source-code graph extraction
+infrastructure commands
+ticket-system behavior
+notification transports
+memory storage
+wiki/UI implementation
+LLM provider integration
+```
 
-## Human approval
+This boundary is intentional.
 
-The SRE and alert graphs use LangGraph `interrupt()`. Production callers must
-compile with a durable checkpointer, pass a stable `thread_id`, and resume with
-`Command(resume=...)`. External side effects use idempotency keys because a
-node may be executed again after recovery.
+## Project status
 
-See [docs/architecture.md](docs/architecture.md) for contracts, ownership, and
-the suggested migration sequence. See
-[docs/observability.md](docs/observability.md) for Langfuse configuration,
-masking, sampling, and evaluation guidance. The
-[production productization plan](docs/production-productization-plan.md) and
-[reviewed execution backlog](docs/production-productization-review.md) describe
-the gated path from the reference implementation to a read-only alert pilot.
-[ADR-0001](docs/adr/0001-async-runtime-and-lifecycle.md) defines the accepted
-async runtime and process lifecycle boundary.
-[ADR-0002](docs/adr/0002-postgres-durable-delivery.md) defines the brokerless
-PostgreSQL delivery and recovery semantics.
-[ADR-0003](docs/adr/0003-persistence-checkpoints-and-retention.md) defines
-application/checkpoint isolation, idempotency, audit, and retention.
-[ADR-0004](docs/adr/0004-authentication-authorization-and-replay.md) defines
-API and webhook identity, deterministic authorization, approval binding, and
-replay protection.
-[ADR-0005](docs/adr/0005-local-compose-deployment.md) defines the local-only
-Compose topology, migrations, health, shutdown, and secret boundaries.
-[ADR-0006](docs/adr/0006-external-adapter-contracts.md) defines async adapter
-contracts and the read-only public Sock Shop service-graph integration.
-The [application persistence guide](docs/persistence.md) documents migration
-ownership, commands, and the current database-test boundary.
-The [read-only pilot threat model](docs/security/read-only-pilot-threat-model.md)
-defines trust boundaries, data classes, abuse cases, and Gate G1 security
-requirements for the public sample.
+The project is currently under active architectural migration toward the runtime-neutral plugin model.
+
+Some reference workflows may temporarily use compatibility adapters while they are migrated to the v2 contracts.
+
+The target architecture is:
+
+```text
+                 Platform Agent Orchestrator
+
+                   runtime-neutral core
+                           |
+          +----------------+----------------+
+          |                |                |
+       plugins         capabilities       policy
+          |                |                |
+          +----------------+----------------+
+                           |
+                     runtime API
+                           |
+              +------------+------------+
+              |                         |
+          LangGraph                 future runtime
+```
+
+The long-term goal is not to build a collection of hard-coded SRE agents.
+
+The goal is to provide a reusable orchestration layer on which independently developed agent workflows can run.
+
+## Development
+
+Run the test suite:
+
+```bash
+pytest
+```
+
+Run linting:
+
+```bash
+ruff check .
+```
+
+The repository contains dependency-boundary tests that prevent runtime-specific frameworks such as LangGraph or LangChain from leaking into framework-neutral `core` and `sdk` contracts.
+
+## Documentation
+
+See:
+
+- `docs/architecture.md` for architecture and ownership boundaries;
+- `docs/observability.md` for tracing and evaluation;
+- `docs/persistence.md` for durable execution;
+- `docs/adr/` for architecture decisions;
+- `docs/security/` for threat models and security boundaries.
+
+## License
+
+See the repository license for usage and distribution terms.
