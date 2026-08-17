@@ -75,7 +75,7 @@ services:
 
   checkpoint-migrate:
     build: .
-    command: ["python", "-c", "from platform_agent_orchestrator.runtime import checkpoint_migrate_main; checkpoint_migrate_main()"]
+    command: ["python", "-c", "from platform_agent_orchestrator.runtime.process import checkpoint_migrate_main; checkpoint_migrate_main()"]
     environment:
       <<: *runtime-environment
       PLATFORM_RUNTIME_ROLE: migration
@@ -91,7 +91,7 @@ services:
   api:
     <<: *runtime-hardening
     build: .
-    command: ["uvicorn", "platform_agent_orchestrator.runtime:build_api_app", "--factory", "--host", "0.0.0.0", "--port", "8080", "--timeout-graceful-shutdown", "15"]
+    command: ["uvicorn", "platform_agent_orchestrator.runtime.process:build_api_app", "--factory", "--host", "0.0.0.0", "--port", "8080", "--timeout-graceful-shutdown", "15"]
     environment:
       <<: *runtime-environment
       PLATFORM_RUNTIME_ROLE: api
@@ -121,7 +121,7 @@ services:
   worker:
     <<: *runtime-hardening
     build: .
-    command: ["python", "-c", "from platform_agent_orchestrator.runtime import worker_main; worker_main()"]
+    command: ["python", "-c", "from platform_agent_orchestrator.runtime.process import worker_main; worker_main()"]
     environment:
       <<: *runtime-environment
       PLATFORM_RUNTIME_ROLE: worker

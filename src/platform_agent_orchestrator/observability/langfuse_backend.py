@@ -9,7 +9,7 @@ from typing import Any
 from langfuse import Langfuse, propagate_attributes
 from langfuse.langchain import CallbackHandler
 
-from platform_agent_orchestrator.contracts import DomainEvent
+from platform_agent_orchestrator.core.events import DomainEvent
 
 from .base import (
     ScoreDataType,

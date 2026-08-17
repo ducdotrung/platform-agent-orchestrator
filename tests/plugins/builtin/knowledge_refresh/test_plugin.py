@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from platform_agent_orchestrator.adapters.demo import DemoPlatformServices
+from platform_agent_orchestrator.adapters.demo import DemoAdapters
 from platform_agent_orchestrator.adapters.demo_capabilities import (
     DemoKnowledgeRefreshCapabilityProvider,
 )
@@ -248,7 +248,7 @@ def test_provenance_failure_blocks_publication() -> None:
 
 
 def test_demo_publication_is_atomic_and_idempotent() -> None:
-    demo = DemoPlatformServices()
+    demo = DemoAdapters()
     provider = DemoKnowledgeRefreshCapabilityProvider(demo.extractor, demo.publisher)
     dispatcher, _capabilities, _agents, _flows = build_dispatcher(provider)
     event = merged_event()

@@ -36,8 +36,8 @@ dev = [
 
 [project.scripts]
 platform-agent = "platform_agent_orchestrator.cli:main"
-platform-agent-worker = "platform_agent_orchestrator.runtime:worker_main"
-platform-agent-checkpoint-migrate = "platform_agent_orchestrator.runtime:checkpoint_migrate_main"
+platform-agent-worker = "platform_agent_orchestrator.runtime.process:worker_main"
+platform-agent-checkpoint-migrate = "platform_agent_orchestrator.runtime.process:checkpoint_migrate_main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/platform_agent_orchestrator"]

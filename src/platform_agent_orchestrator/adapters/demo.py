@@ -11,14 +11,10 @@ from platform_agent_orchestrator.contracts import (
     ActionResult,
     AgentDecision,
     DecisionStatus,
-    DomainEvent,
     EvidenceKind,
     EvidenceRef,
     KnowledgeArtifact,
-    RiskLevel,
 )
-
-from .ports import NotificationPort, PlatformServices
 
 
 def stable_id(*parts: str) -> str:
@@ -115,25 +111,17 @@ class DemoReasoner:
             evidence_ids=[item.id for item in evidence],
         )
 
-    def plan_sre(self, ticket: dict[str, Any], evidence: list[EvidenceRef]) -> list[ActionRequest]:
-        target = str(ticket.get("service", "unknown-service"))
-        operation = str(ticket.get("operation", "inspect"))
-        risk = RiskLevel.SAFE if operation in {"inspect", "logs", "status"} else RiskLevel.RISKY
-        return [
-            ActionRequest(
-                action=operation,
-                target=target,
-                parameters={"environment": ticket.get("environment", "dev")},
-                risk=risk,
-                idempotency_key=f"{ticket.get('key', 'ticket')}:{operation}:{target}",
-            )
-        ]
-
 
 @dataclass
 class DemoExtractor:
     def extract(
-        self, surface: str, event: DomainEvent, changed_files: list[str]
+        self,
+        surface: str,
+        *,
+        subject: str,
+        source: str,
+        revision: str,
+        changed_files: list[str],
     ) -> list[KnowledgeArtifact]:
         relevant = {
             "code": [
@@ -146,20 +134,19 @@ class DemoExtractor:
         }[surface]
         if not relevant:
             return []
-        revision = str(event.payload.get("revision", "unknown"))
-        artifact_id = stable_id(event.subject, revision, surface)
+        artifact_id = stable_id(subject, revision, surface)
         return [
             KnowledgeArtifact(
                 id=artifact_id,
                 artifact_type=surface,
-                subject=event.subject,
+                subject=subject,
                 revision=revision,
                 content={"changed_files": relevant, "summary": f"Refreshed {surface} knowledge"},
                 evidence=[
                     EvidenceRef(
                         id=f"evidence-{artifact_id}",
                         kind=EvidenceKind(surface),
-                        source=event.source,
+                        source=source,
                         locator=path,
                         revision=revision,
                         summary=f"Changed {surface} source: {path}",
@@ -263,7 +250,7 @@ class DemoActions:
 
 
 @dataclass
-class DemoPlatformServices:
+class DemoAdapters:
     knowledge: DemoKnowledge = field(default_factory=DemoKnowledge)
     alert_classifier: DemoAlertClassifier = field(default_factory=DemoAlertClassifier)
     reasoner: DemoReasoner = field(default_factory=DemoReasoner)
@@ -271,14 +258,3 @@ class DemoPlatformServices:
     publisher: DemoPublisher = field(default_factory=DemoPublisher)
     notifier: DemoNotifier = field(default_factory=DemoNotifier)
     actions: DemoActions = field(default_factory=DemoActions)
-
-    def as_services(self, *, notifier: NotificationPort | None = None) -> PlatformServices:
-        return PlatformServices(
-            knowledge=self.knowledge,
-            alert_classifier=self.alert_classifier,
-            reasoner=self.reasoner,
-            extractor=self.extractor,
-            publisher=self.publisher,
-            notifier=notifier or self.notifier,
-            actions=self.actions,
-        )

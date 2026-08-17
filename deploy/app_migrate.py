@@ -5,7 +5,7 @@ from __future__ import annotations
 from alembic import command
 from alembic.config import Config
 
-from platform_agent_orchestrator.runtime import _runtime_settings
+from platform_agent_orchestrator.runtime.process import _runtime_settings
 
 
 def main() -> None:

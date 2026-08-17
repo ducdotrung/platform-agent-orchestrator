@@ -30,4 +30,4 @@ COPY deploy ./deploy
 
 USER 10001:10001
 EXPOSE 8080
-CMD ["uvicorn", "platform_agent_orchestrator.runtime:build_api_app", "--factory", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "platform_agent_orchestrator.runtime.process:build_api_app", "--factory", "--host", "0.0.0.0", "--port", "8080"]

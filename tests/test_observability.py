@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
+from platform_agent_orchestrator.core import DomainEvent
 from platform_agent_orchestrator.observability import (
     NoOpObservability,
     ObservabilitySettings,
@@ -80,3 +83,28 @@ def test_result_summary_excludes_state_bodies() -> None:
         "artifact_count": 1,
         "snapshot_id": "snapshot-1",
     }
+
+
+def test_noop_observability_accepts_v2_event_without_content_metadata() -> None:
+    event = DomainEvent(
+        id="event-1",
+        type="sre.ticket.updated",
+        source="test",
+        subject="INF-1",
+        occurred_at=datetime(2026, 8, 17, tzinfo=UTC),
+        correlation_id="correlation-1",
+        idempotency_key="secret-idempotency-key",
+        data={"password": "do-not-export"},
+    )
+
+    with NoOpObservability().trace_workflow("sre", event) as trace:
+        assert trace.metadata == {
+            "workflow": "sre",
+            "event_id": "event-1",
+            "event_type": "sre.ticket.updated",
+            "event_source": "test",
+            "event_subject": "INF-1",
+            "correlation_id": "correlation-1",
+        }
+        assert "secret-idempotency-key" not in str(trace.metadata)
+        assert "do-not-export" not in str(trace.metadata)

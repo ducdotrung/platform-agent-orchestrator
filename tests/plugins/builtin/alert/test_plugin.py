@@ -13,7 +13,6 @@ from pydantic import ValidationError
 from platform_agent_orchestrator.contracts import (
     AlertReceivedPayloadV1,
     EventEnvelopeV1,
-    EventType,
 )
 from platform_agent_orchestrator.core import (
     CapabilityRequest,
@@ -374,7 +373,6 @@ def test_event_migration_is_explicit_and_rejects_legacy_type() -> None:
 
     assert flow.accepts(alert_event())
     assert not flow.accepts(alert_event(event_type="alert.received"))
-    assert EventType.ALERT_RECEIVED.value == "monitoring.alert.received"
 
     payload = AlertReceivedPayloadV1(
         alert_id="PAYMENT-1",

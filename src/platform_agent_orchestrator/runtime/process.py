@@ -1,4 +1,4 @@
-"""Legacy process composition retained until dispatcher/bootstrap migration."""
+"""Production API, worker, and checkpoint process composition."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from platform_agent_orchestrator.adapters import DemoPlatformServices
+from platform_agent_orchestrator.adapters import DemoAdapters
 from platform_agent_orchestrator.api import ReadinessReport, create_app
 from platform_agent_orchestrator.bootstrap import build_dependencies
 from platform_agent_orchestrator.checkpointing import postgres_checkpointer
@@ -137,11 +137,9 @@ async def run_worker(stop_event: asyncio.Event | None = None) -> None:
         metrics=metrics,
         event_logger=event_logger,
     )
-    demo = DemoPlatformServices()
-    services = demo.as_services(
-        notifier=DurableNotifier(side_effect_store, demo.notifier, settings.scope_id)
-    )
-    dependencies = build_dependencies(settings, services=services)
+    demo = DemoAdapters()
+    notifier = DurableNotifier(side_effect_store, demo.notifier, settings.scope_id)
+    dependencies = build_dependencies(settings, demo=demo, notifier=notifier)
     stop = stop_event or asyncio.Event()
     loop = asyncio.get_running_loop()
     if stop_event is None:
@@ -153,10 +151,7 @@ async def run_worker(stop_event: asyncio.Event | None = None) -> None:
         with postgres_checkpointer(settings.checkpoint_database_url) as checkpointer:
             checkpointer.get({"configurable": {"thread_id": "worker-health"}})
             WORKER_READY_PATH.write_text("ready\n")
-            flow_dispatcher = dependencies.dispatcher(
-                checkpointer=checkpointer,
-                services=services,
-            )
+            flow_dispatcher = dependencies.dispatcher(checkpointer=checkpointer)
             worker = Worker(
                 worker_id="local-worker-1",
                 dispatcher=DatabaseJobDispatcher(repository),

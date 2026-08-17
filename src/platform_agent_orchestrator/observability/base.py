@@ -1,4 +1,4 @@
-"""Small observability boundary used by the workflow registry."""
+"""Small observability boundary for orchestration execution."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
-from platform_agent_orchestrator.contracts import DomainEvent
+from platform_agent_orchestrator.core.events import DomainEvent
 
 ScoreDataType = Literal["NUMERIC", "BOOLEAN", "CATEGORICAL"]
 ScoreValue = float | str | bool
@@ -14,7 +14,7 @@ ScoreValue = float | str | bool
 
 @dataclass
 class WorkflowTrace:
-    """Per-invocation trace hooks without coupling the registry to a vendor SDK."""
+    """Per-invocation trace hooks without coupling orchestration to a vendor SDK."""
 
     callbacks: list[Any] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
@@ -60,13 +60,15 @@ class ObservabilityBackend(Protocol):
     def shutdown(self) -> None: ...
 
 
-def workflow_metadata(workflow: str, event: DomainEvent) -> dict[str, str]:
+def workflow_metadata(
+    workflow: str, event: DomainEvent
+) -> dict[str, str | None]:
     """Return bounded identifiers; payloads and idempotency keys are excluded."""
 
     return {
         "workflow": workflow,
         "event_id": event.id,
-        "event_type": event.type.value,
+        "event_type": event.type,
         "event_source": event.source,
         "event_subject": event.subject,
         "correlation_id": event.correlation_id,

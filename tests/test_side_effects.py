@@ -10,7 +10,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy.orm import Session, sessionmaker
 
-from platform_agent_orchestrator.adapters import DemoPlatformServices
+from platform_agent_orchestrator.adapters import DemoAdapters
 from platform_agent_orchestrator.adapters.demo import DemoNotifier
 from platform_agent_orchestrator.bootstrap import build_dependencies
 from platform_agent_orchestrator.core import DomainEvent
@@ -115,11 +115,12 @@ def test_expired_claim_becomes_unknown_and_is_not_blindly_retried(tmp_path: Path
 
 def test_alert_capability_uses_durable_composed_notifier(tmp_path: Path) -> None:
     store, engine, _clock = store_for(tmp_path)
-    demo = DemoPlatformServices()
+    demo = DemoAdapters()
     durable = DurableNotifier(store, demo.notifier, "sock-shop-sample")
     dependencies = build_dependencies(
         ApplicationSettings(),
-        services=demo.as_services(notifier=durable),
+        demo=demo,
+        notifier=durable,
     )
     event = DomainEvent(
         id="durable-alert-event",

@@ -15,7 +15,6 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from platform_agent_orchestrator.adapters import DemoPlatformServices
 from platform_agent_orchestrator.api import create_app
 from platform_agent_orchestrator.bootstrap import RuntimeDependencies
 from platform_agent_orchestrator.contracts import AlertReceivedPayloadV1, EventEnvelopeV1
@@ -117,7 +116,6 @@ def test_feedback_is_authoritative_when_telemetry_is_unavailable(tmp_path: Path)
     telemetry = UnavailableTelemetry()
     dependencies = RuntimeDependencies(
         settings=settings,
-        services=DemoPlatformServices().as_services(),
         observability=telemetry,
     )
     security = ReviewerSecurity(

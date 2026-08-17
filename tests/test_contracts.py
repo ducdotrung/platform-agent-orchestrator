@@ -5,9 +5,7 @@ from pydantic import ValidationError
 
 from platform_agent_orchestrator.contracts import (
     AlertReceivedPayloadV1,
-    DomainEvent,
     EventEnvelopeV1,
-    EventType,
     EvidenceKind,
     EvidenceRef,
 )
@@ -32,23 +30,13 @@ def valid_alert_envelope() -> dict[str, object]:
     }
 
 
-def test_domain_event_requires_idempotency_identity() -> None:
-    with pytest.raises(ValidationError):
-        DomainEvent.from_legacy(
-            type=EventType.ALERT_RECEIVED,
-            source="sentry",
-            subject="A-1",
-            idempotency_key="",
-        )
-
-
 def test_alert_envelope_converts_to_internal_event() -> None:
     envelope = EventEnvelopeV1.model_validate(valid_alert_envelope())
 
     event = envelope.to_domain_event()
 
-    assert event.type == EventType.ALERT_RECEIVED
-    assert event.payload["severity"] == "critical"
+    assert event.type == "monitoring.alert.received"
+    assert event.data["severity"] == "critical"
 
 
 @pytest.mark.parametrize(
@@ -73,18 +61,6 @@ def test_alert_envelope_rejects_extra_unknown_oversized_and_incompatible_fields(
 
     with pytest.raises(ValidationError):
         EventEnvelopeV1.model_validate(candidate)
-
-
-def test_legacy_constructor_is_an_explicit_migration_path() -> None:
-    event = DomainEvent.from_legacy(
-        type=EventType.ENGINEERING_QUESTION,
-        source="test",
-        subject="question-1",
-        idempotency_key="test:question-1",
-        payload={"question": "Which tests cover orders?"},
-    )
-
-    assert event.payload["question"] == "Which tests cover orders?"
 
 
 def test_alert_payload_uses_strict_numeric_types() -> None:

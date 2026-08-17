@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Protocol
 
 from platform_agent_orchestrator.contracts import (
     ActionRequest,
     ActionResult,
     AgentDecision,
-    DomainEvent,
     EvidenceRef,
     KnowledgeArtifact,
 )
@@ -26,14 +24,16 @@ class AlertClassificationPort(Protocol):
 class ReasoningPort(Protocol):
     def assess_alert(self, alert: dict[str, Any], evidence: list[EvidenceRef]) -> AgentDecision: ...
 
-    def plan_sre(
-        self, ticket: dict[str, Any], evidence: list[EvidenceRef]
-    ) -> list[ActionRequest]: ...
-
 
 class ExtractionPort(Protocol):
     def extract(
-        self, surface: str, event: DomainEvent, changed_files: list[str]
+        self,
+        surface: str,
+        *,
+        subject: str,
+        source: str,
+        revision: str,
+        changed_files: list[str],
     ) -> list[KnowledgeArtifact]: ...
 
 
@@ -63,14 +63,3 @@ class ActionPort(Protocol):
     def execute(self, request: ActionRequest) -> ActionResult: ...
 
     def verify(self, result: ActionResult) -> bool: ...
-
-
-@dataclass(frozen=True)
-class PlatformServices:
-    knowledge: KnowledgePort
-    alert_classifier: AlertClassificationPort
-    reasoner: ReasoningPort
-    extractor: ExtractionPort
-    publisher: PublicationPort
-    notifier: NotificationPort
-    actions: ActionPort

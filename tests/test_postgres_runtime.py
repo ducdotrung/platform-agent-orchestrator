@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from platform_agent_orchestrator.adapters import DemoPlatformServices
+from platform_agent_orchestrator.adapters import DemoAdapters
 from platform_agent_orchestrator.bootstrap import build_dependencies
 from platform_agent_orchestrator.checkpointing import postgres_checkpointer
 from platform_agent_orchestrator.contracts import AlertReceivedPayloadV1, EventEnvelopeV1
@@ -57,15 +57,13 @@ def test_postgres_runtime_completes_durable_alert_and_approval_paths() -> None:
         side_effects = DatabaseSideEffectStore(
             sessionmaker(sync_engine, expire_on_commit=False)
         )
-        demo = DemoPlatformServices()
-        services = demo.as_services(
-            notifier=DurableNotifier(
-                side_effects,
-                demo.notifier,
-                settings.scope_id,
-            )
+        demo = DemoAdapters()
+        notifier = DurableNotifier(
+            side_effects,
+            demo.notifier,
+            settings.scope_id,
         )
-        dependencies = build_dependencies(settings)
+        dependencies = build_dependencies(settings, demo=demo, notifier=notifier)
         event = EventEnvelopeV1(
             source="sample-sre-alert-agent",
             subject="orders-high-errors",
@@ -89,10 +87,7 @@ def test_postgres_runtime_completes_durable_alert_and_approval_paths() -> None:
             claims = await repository.claim_jobs("postgres-test-worker", limit=32)
             claim = next(item for item in claims if item.run_id == admission.run_id)
             with postgres_checkpointer(checkpoint_url) as checkpointer:
-                flow_dispatcher = dependencies.dispatcher(
-                    checkpointer=checkpointer,
-                    services=services,
-                )
+                flow_dispatcher = dependencies.dispatcher(checkpointer=checkpointer)
                 result = await RegistryExecution(repository, flow_dispatcher).execute(claim)
             await repository.record_success(
                 claim,

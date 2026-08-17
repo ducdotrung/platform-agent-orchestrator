@@ -8,7 +8,7 @@ import pytest
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from pydantic import SecretStr
 
-from platform_agent_orchestrator.adapters import DemoPlatformServices
+from platform_agent_orchestrator.adapters import DemoAdapters
 from platform_agent_orchestrator.bootstrap import build_dependencies
 from platform_agent_orchestrator.checkpointing import (
     _psycopg_connection_url,
@@ -84,11 +84,11 @@ def test_postgres_factory_normalizes_sqlalchemy_driver_url(monkeypatch: pytest.M
 
 
 def test_process_restart_resumes_same_interrupted_thread(tmp_path: Path) -> None:
-    async def exercise_restart() -> tuple[object, DemoPlatformServices]:
+    async def exercise_restart() -> tuple[object, DemoAdapters]:
         checkpoint_path = tmp_path / "checkpoints.db"
         event = risky_ticket()
-        first_demo = DemoPlatformServices()
-        first_dependencies = build_dependencies(services=first_demo.as_services())
+        first_demo = DemoAdapters()
+        first_dependencies = build_dependencies(demo=first_demo)
         try:
             async with AsyncSqliteSaver.from_conn_string(str(checkpoint_path)) as saver:
                 paused = (
@@ -110,8 +110,8 @@ def test_process_restart_resumes_same_interrupted_thread(tmp_path: Path) -> None
             tenant_id=event.tenant_id,
             status=RunStatus.PAUSED.value,
         )
-        second_demo = DemoPlatformServices()
-        second_dependencies = build_dependencies(services=second_demo.as_services())
+        second_demo = DemoAdapters()
+        second_dependencies = build_dependencies(demo=second_demo)
         try:
             async with AsyncSqliteSaver.from_conn_string(str(checkpoint_path)) as saver:
                 resumed = await second_dependencies.dispatcher(checkpointer=saver).resume(

@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from deploy import generate_secrets, smoke
 from platform_agent_orchestrator.api import create_app
 from platform_agent_orchestrator.persistence import DatabaseReplayStore
-from platform_agent_orchestrator.runtime import _runtime_settings
+from platform_agent_orchestrator.runtime.process import _runtime_settings
 from platform_agent_orchestrator.settings import RuntimeRole
 
 ROOT = Path(__file__).resolve().parents[1]

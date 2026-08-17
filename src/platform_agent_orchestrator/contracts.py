@@ -9,16 +9,11 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from platform_agent_orchestrator.core.events import DomainEvent as CoreDomainEvent
+
 
 def utc_now() -> datetime:
     return datetime.now(UTC)
-
-
-class EventType(StrEnum):
-    ALERT_RECEIVED = "monitoring.alert.received"
-    PR_MERGED = "scm.pull_request.merged"
-    SRE_TICKET_UPDATED = "sre.ticket.updated"
-    ENGINEERING_QUESTION = "engineering.question"
 
 
 class RiskLevel(StrEnum):
@@ -41,53 +36,6 @@ class EvidenceKind(StrEnum):
     GRAPH = "graph"
     ALERT = "alert"
     HUMAN = "human"
-
-
-class DomainEvent(BaseModel):
-    """Internal trigger accepted by the workflow registry.
-
-    New ingress code must validate an EventEnvelopeV1 and call to_domain_event().
-    Existing in-process callers can migrate explicitly through from_legacy().
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    id: str = Field(default_factory=lambda: str(uuid4()))
-    type: EventType
-    source: str
-    subject: str
-    occurred_at: datetime = Field(default_factory=utc_now)
-    correlation_id: str = Field(default_factory=lambda: str(uuid4()))
-    idempotency_key: str
-    payload: dict[str, Any] = Field(default_factory=dict)
-
-    @classmethod
-    def from_legacy(
-        cls,
-        *,
-        type: EventType,
-        source: str,
-        subject: str,
-        idempotency_key: str,
-        payload: dict[str, Any] | None = None,
-        **identity: Any,
-    ) -> Self:
-        """Build an internal event while legacy workflow payloads are migrated."""
-
-        return cls(
-            type=type,
-            source=source,
-            subject=subject,
-            idempotency_key=idempotency_key,
-            payload=payload or {},
-            **identity,
-        )
-
-    @model_validator(mode="after")
-    def require_non_empty_identity(self) -> DomainEvent:
-        if not self.source.strip() or not self.subject.strip() or not self.idempotency_key.strip():
-            raise ValueError("source, subject, and idempotency_key must be non-empty")
-        return self
 
 
 class AlertReceivedPayloadV1(BaseModel):
@@ -133,18 +81,18 @@ class EventEnvelopeV1(BaseModel):
             raise ValueError("event identity fields must be non-empty and trimmed")
         return self
 
-    def to_domain_event(self) -> DomainEvent:
+    def to_domain_event(self) -> CoreDomainEvent:
         """Cross the validated transport boundary into serialization-friendly state."""
 
-        return DomainEvent(
+        return CoreDomainEvent(
             id=self.id,
-            type=EventType(self.type),
+            type=self.type,
             source=self.source,
             subject=self.subject,
             occurred_at=self.occurred_at,
             correlation_id=self.correlation_id,
             idempotency_key=self.idempotency_key,
-            payload=self.payload.model_dump(mode="json"),
+            data=self.payload.model_dump(mode="json"),
         )
 
 

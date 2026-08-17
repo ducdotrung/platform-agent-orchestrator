@@ -12,13 +12,7 @@ from platform_agent_orchestrator.contracts import (
 from platform_agent_orchestrator.contracts import (
     ActionResult as LegacyActionResult,
 )
-from platform_agent_orchestrator.contracts import (
-    DomainEvent as LegacyDomainEvent,
-)
-from platform_agent_orchestrator.contracts import (
-    EventType,
-    EvidenceKind,
-)
+from platform_agent_orchestrator.contracts import EvidenceKind
 from platform_agent_orchestrator.contracts import (
     EvidenceRef as LegacyEvidenceRef,
 )
@@ -185,14 +179,13 @@ class DemoKnowledgeRefreshCapabilityProvider:
         source = str(request.arguments["source"])
         revision = str(request.arguments["revision"])
         changed_files = [str(path) for path in request.arguments["changed_files"]]
-        event = LegacyDomainEvent.from_legacy(
-            type=EventType.PR_MERGED,
-            source=source,
+        artifacts = self.extractor.extract(
+            adapter_surface,
             subject=subject,
-            idempotency_key=f"demo-extract:{subject}:{revision}:{surface}",
-            payload={"revision": revision, "changed_files": changed_files},
+            source=source,
+            revision=revision,
+            changed_files=changed_files,
         )
-        artifacts = self.extractor.extract(adapter_surface, event, changed_files)
         converted = [
             KnowledgeArtifact(
                 id=artifact.id,

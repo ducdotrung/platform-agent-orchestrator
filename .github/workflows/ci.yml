@@ -41,7 +41,7 @@ jobs:
       - run: python -m ruff check .
       - run: python -m deploy.bootstrap_databases
       - run: python -m deploy.app_migrate
-      - run: python -c "from platform_agent_orchestrator.runtime import checkpoint_migrate_main; checkpoint_migrate_main()"
+      - run: python -c "from platform_agent_orchestrator.runtime.process import checkpoint_migrate_main; checkpoint_migrate_main()"
       - run: python -m pytest
 
   image-and-smoke:

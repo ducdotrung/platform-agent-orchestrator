@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from platform_agent_orchestrator.contracts import DomainEvent
+from platform_agent_orchestrator.core.events import DomainEvent
 
 from .base import ScoreDataType, ScoreValue, WorkflowTrace, workflow_metadata, workflow_tags
 
